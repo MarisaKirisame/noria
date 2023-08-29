@@ -322,10 +322,10 @@ impl Domain {
         }
 
         if tags.is_empty() {
-            unreachable!(format!(
+            unreachable!(
                 "no tag found to fill missing value {:?} in {}.{:?}",
                 miss_keys, miss_in, miss_columns
-            ));
+            );
         }
     }
 

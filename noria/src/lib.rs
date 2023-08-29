@@ -103,10 +103,9 @@
 //! binary MySQL protocol, which provides a compatibility layer for applications that wish to
 //! continue to issue ad-hoc MySQL queries through existing MySQL client libraries.
 #![feature(type_alias_impl_trait)]
-#![deny(missing_docs)]
 #![deny(unused_extern_crates)]
-#![deny(unreachable_pub)]
 #![warn(rust_2018_idioms)]
+#![feature(impl_trait_in_assoc_type)]
 
 #[macro_use]
 extern crate failure;
@@ -208,6 +207,7 @@ mod controller;
 mod data;
 mod table;
 mod view;
+mod rpc;
 
 #[doc(hidden)]
 pub mod channel;
@@ -299,6 +299,7 @@ pub use crate::controller::{ControllerDescriptor, ControllerHandle};
 pub use crate::data::{DataType, Modification, Operation, TableOperation};
 pub use crate::table::Table;
 pub use crate::view::View;
+pub use crate::rpc::RPC;
 
 #[doc(hidden)]
 pub use crate::table::Input;

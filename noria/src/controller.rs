@@ -3,6 +3,7 @@ use crate::debug::stats;
 use crate::table::{Table, TableBuilder, TableRpc};
 use crate::view::{View, ViewBuilder, ViewRpc};
 use crate::ActivationResult;
+use crate::rpc::*;
 use failure::{self, ResultExt};
 use futures_util::future;
 use petgraph::graph::NodeIndex;
@@ -173,13 +174,6 @@ impl ControllerHandle<consensus::ZookeeperAuthority> {
     }
 }
 
-// this alias is needed to work around -> impl Trait capturing _all_ lifetimes by default
-// the A parameter is needed so it gets captured into the impl Trait
-#[cfg(not(doc))]
-type RpcFuture<A, R> = impl Future<Output = Result<R, failure::Error>>;
-#[cfg(doc)]
-type RpcFuture<A, R> = crate::doc_mock::FutureWithExtra<Result<R, failure::Error>, A>;
-
 // Needed b/c of https://github.com/rust-lang/rust/issues/65442
 async fn finalize<R, E>(
     fut: impl Future<Output = Result<hyper::body::Bytes, E>>,
@@ -195,6 +189,24 @@ where
         .context("failed to response")
         .context(err)
         .map_err(failure::Error::from)
+}
+
+impl<A: Authority + 'static> RPC<A> for ControllerHandle<A> {
+    type RpcFuture<R> = impl Future<Output = Result<R, failure::Error>>;
+
+    fn rpc<Q: Serialize, R: 'static>(
+        &mut self,
+        path: &'static str,
+        r: Q,
+        err: &'static str,
+    ) -> Self::RpcFuture<R>
+    where
+        for<'de> R: Deserialize<'de>,
+        R: Send,
+    {
+        let fut = self.handle.call(ControllerRequest::new(path, r).unwrap());
+        finalize(fut, err)
+    }
 }
 
 impl<A: Authority + 'static> ControllerHandle<A> {
@@ -352,22 +364,6 @@ impl<A: Authority + 'static> ControllerHandle<A> {
             }
             .map_err(move |e| e.context(format!("building table for {}", name)).into())
         }
-    }
-
-    #[doc(hidden)]
-    pub fn rpc<Q: Serialize, R: 'static>(
-        &mut self,
-        path: &'static str,
-        r: Q,
-        err: &'static str,
-    ) -> RpcFuture<A, R>
-    where
-        for<'de> R: Deserialize<'de>,
-        R: Send,
-    {
-        let fut = self.handle.call(ControllerRequest::new(path, r).unwrap());
-
-        finalize(fut, err)
     }
 
     /// Get statistics about the time spent processing different parts of the graph.

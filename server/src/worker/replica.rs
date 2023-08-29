@@ -485,14 +485,14 @@ impl Outboxes {
     }
 
     fn saw_input(&mut self, token: usize, epoch: usize) {
-        let mut c = &mut self.connections[token];
+        let c = &mut self.connections[token];
         if c.epoch == epoch {
             c.unacked += 1;
         }
     }
 
     fn try_retire(&mut self, streami: usize) -> bool {
-        let mut c = &mut self.connections[streami];
+        let c = &mut self.connections[streami];
         if c.unacked == 0 && c.tag_acks.is_empty() && !c.pending_flush {
             // nothing more to send back on this connection -- fine to retire!
             // increment the epoch to detect stale acks
@@ -512,7 +512,7 @@ impl Outboxes {
 impl Executor for Outboxes {
     fn ack(&mut self, id: SourceChannelIdentifier) {
         self.dirty = true;
-        let mut c = &mut self.connections[id.token];
+        let c = &mut self.connections[id.token];
         if id.epoch == c.epoch {
             // if the epoch doesn't match, the stream was closed and a new one has been established
             // note that this only matters for connections that do not wait for all acks!

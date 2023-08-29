@@ -760,7 +760,7 @@ impl MirNodeType {
                     ref value,
                     ref key,
                     ref column,
-                } => (value == our_value && our_key == key && our_col == column),
+                } => value == our_value && our_key == key && our_col == column,
                 _ => false,
             },
             _ => unimplemented!(),

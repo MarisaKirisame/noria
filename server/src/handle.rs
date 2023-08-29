@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use stream_cancel::Trigger;
+use noria::RPC;
 
 /// A handle to a controller that is running in the same process as this one.
 pub struct Handle<A: Authority + 'static> {
