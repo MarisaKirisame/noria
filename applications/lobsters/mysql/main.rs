@@ -1,4 +1,5 @@
 #![feature(type_alias_impl_trait)]
+#![feature(impl_trait_in_assoc_type)]
 
 extern crate mysql_async as my;
 
@@ -327,6 +328,14 @@ fn main() {
                 .help("Which set of queries to run"),
         )
         .arg(
+            Arg::with_name("warmup")
+                .short("w")
+                .long("warmup")
+                .takes_value(true)
+                .default_value("20")
+                .help("Benchmark warmup in seconds"),
+        )
+        .arg(
             Arg::with_name("runtime")
                 .short("r")
                 .long("runtime")
@@ -361,8 +370,11 @@ fn main() {
     let mut wl = trawler::WorkloadBuilder::default();
     wl.scale(value_t_or_exit!(args, "scale", f64))
         .time(time::Duration::from_secs(value_t_or_exit!(
-            args, "runtime", u64
-        )))
+            args, "warmup", u64
+        )),
+              time::Duration::from_secs(value_t_or_exit!(
+                  args, "runtime", u64
+              )))
         .in_flight(in_flight);
 
     if let Some(h) = args.value_of("histogram") {
