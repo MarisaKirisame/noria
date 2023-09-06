@@ -253,7 +253,7 @@ task_local! {
     static TRACE_NEXT: ();
 }
 
-fn trace_next_op() -> bool {
+pub fn trace_next_op() -> bool {
     TRACE_NEXT.try_with(|_| true).unwrap_or(false)
 }
 
