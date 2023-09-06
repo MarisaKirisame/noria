@@ -245,6 +245,47 @@ fn main() {
         .arg(
             Arg::with_name("prime")
                 .long("prime")
+                .help("Set if the backend must be primed with initial stories and comments."),
+        )
+        .arg(
+            Arg::with_name("runtime")
+                .short("r")
+                .long("runtime")
+                .takes_value(true)
+                .default_value("30")
+                .help("Benchmark runtime in seconds"),
+        )
+        .arg(
+            Arg::with_name("histogram")
+                .long("histogram")
+                .help("Use file-based serialized HdrHistograms")
+                .takes_value(true)
+                .long_help("There are multiple histograms, two for each lobsters request."),
+        )
+        .arg(
+            Arg::with_name("zookeeper")
+                .short("z")
+                .long("zookeeper")
+                .takes_value(true)
+                .required(true)
+                .default_value("127.0.0.1:2181")
+                .help("Address of Zookeeper instance"),
+        )
+        .arg(
+            Arg::with_name("deployment")
+                .long("deployment")
+                .default_value("trawler")
+                .required(true)
+                .takes_value(true)
+                .help("Soup deployment ID."),
+        )
+        .get_matches();
+    let in_flight = value_t_or_exit!(args, "in-flight", usize);
+    let zk = format!(
+        "{}/{}",
+        args.value_of("zookeeper").unwrap(),
+        args.value_of("deployment").unwrap()
+    );
 
     let zk = ZookeeperAuthority::new(&zk).unwrap();
     println!("zk ok!");
