@@ -75,7 +75,9 @@ impl Service<bool> for NoriaTrawlerBuilder {
         println!("call");
         let zk = self.0.take().unwrap();
         Box::pin(async move {
+	    println!("trying controllerhandle.new...");
             let mut c = ControllerHandle::new(zk).await?;
+	    println!("controllerhandle.new ok!");
 
             if priming {
                 c.install_recipe(SCHEMA).await?;
@@ -85,12 +87,15 @@ impl Service<bool> for NoriaTrawlerBuilder {
                 c.extend_recipe(QUERIES).await?;
             }
 
+	    println!("inserting...");
+
             let tables = ConcurrentHashMap::new();
             for (table, _) in c.inputs().await? {
                 let handle = c.table(&table).await?;
                 tables.pin().insert(Cow::Owned(table), handle);
             }
 
+	    println!("returning...");
             Ok(NoriaTrawler {
                 noria: Arc::new(NoriaConnection {
                     ch: Mutex::new(c),
@@ -254,6 +259,14 @@ fn main() {
                 .takes_value(true)
                 .default_value("30")
                 .help("Benchmark runtime in seconds"),
+        )
+        .arg(
+            Arg::with_name("warmup")
+                .short("w")
+                .long("warmup")
+                .takes_value(true)
+                .default_value("20")
+                .help("Benchmark warmup in seconds"),
         )
         .arg(
             Arg::with_name("histogram")

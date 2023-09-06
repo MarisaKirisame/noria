@@ -106,6 +106,7 @@ impl Authority for ZookeeperAuthority {
             match self.zk.exists_w(CONTROLLER_KEY, UnparkWatcher::new()) {
                 Ok(_) => {}
                 Err(ZkError::NoNode) => {
+       		    println!("no controller");
                     warn!(
                         self.log,
                         "no controller present, waiting for one to appear..."
