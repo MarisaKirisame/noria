@@ -885,7 +885,7 @@ mod tests {
         let int = DataType::Int(5);
         let big_int = DataType::BigInt(5);
         assert_eq!(format!("{:?}", tiny_text), "TinyText(\"hi\")");
-        assert_eq!(format!("{:?}", text), "Text(\"I contain \\' and \\\"\")");
+        assert_eq!(format!("{:?}", text), "Text(\"I contain \' and \\\"\")");
         assert_eq!(format!("{:?}", real), "Real(-0.050000000)");
         assert_eq!(
             format!("{:?}", timestamp),
