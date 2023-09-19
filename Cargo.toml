@@ -13,3 +13,6 @@ debug=true
 # optional -- just a perf optimization
 # comment this out if you want cargo doc to work!
 tokio-tower = { git = "https://github.com/MarisaKirisame/tokio-tower.git", branch = "no-box" }
+
+[rust]
+debuginfo-level = 1

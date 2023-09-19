@@ -408,6 +408,7 @@ async fn do_eviction(
     match memory_limit {
         None => (),
         Some(limit) => {
+            println!("handle_eviction: memory = {total}, limit = {limit}");
             if total >= limit {
                 let mut over = total - limit;
 

@@ -2724,7 +2724,6 @@ impl Domain {
                 from = segment.node;
             }
         }
-        println!("domain::handle_eviction");
         match (*m,) {
             (Packet::Evict {
                 node,
