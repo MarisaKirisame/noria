@@ -1,5 +1,7 @@
 use crate::backlog;
 use crate::prelude::*;
+use zombie_sys::*;
+use crate::bucket::*;
 
 #[derive(Serialize, Deserialize)]
 pub struct Reader {
@@ -112,7 +114,7 @@ impl Reader {
         }
     }
 
-    pub(in crate::node) fn process(&mut self, m: &mut Option<Box<Packet>>, swap: bool) {
+    pub(in crate::node) fn process(&mut self, m: &mut Option<Box<Packet>>, swap: bool, zm: &mut ZombieManager) {
         if let Some(ref mut state) = self.writer {
             let m = m.as_mut().unwrap();
             // make sure we don't fill a partial materialization
@@ -164,7 +166,8 @@ impl Reader {
                 });
             }
 
-            state.add(m.take_data());
+            let b = zm.get_bucket();
+            state.add(m.take_data(), zm, b);
 
             if swap {
                 // TODO: avoid doing the pointer swap if we didn't modify anything (inc. ts)

@@ -530,7 +530,6 @@ impl Ingredient for Join {
                 }
             }
         }
-
         ProcessingResult {
             results: ret.into(),
             lookups,

@@ -3,7 +3,7 @@ use itertools::Itertools;
 use rocksdb::{self, PlainTableFactoryOptions, SliceTransform, WriteBatch};
 use serde;
 use tempfile::{tempdir, TempDir};
-
+use crate::state::Bucket;
 use crate::prelude::*;
 use crate::state::{RecordResult, State};
 use common::SizeOf;
@@ -59,7 +59,8 @@ pub struct PersistentState {
 }
 
 impl State for PersistentState {
-    fn process_records(&mut self, records: &mut Records, partial_tag: Option<Tag>) {
+    fn process_records(&mut self, records: &mut Records, partial_tag: Option<Tag>, b: Bucket) {
+        panic!("no persistent!");
         assert!(partial_tag.is_none(), "PersistentState can't be partial");
         if records.len() == 0 {
             return;

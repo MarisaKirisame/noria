@@ -1,0 +1,3 @@
+[submodule "zombie-sys"]
+	path = zombie-sys
+	url = git@github.com:WtzLAS/zombie-sys.git

@@ -334,8 +334,10 @@ async fn listen_df<'a>(
                     log.clone(),
                     coord.clone(),
                 );
+
                 let a = alive.clone();
-                tokio::spawn(async move {
+
+		tokio::spawn(async move {
                     let _alive = a;
                     let log = replica.log.clone();
                     if let Err(e) = replica.await {
@@ -381,6 +383,13 @@ async fn do_eviction(
     coord: &ChannelCoordinator,
     state_sizes: &Arc<Mutex<HashMap<(DomainIndex, usize), Arc<AtomicUsize>>>>,
 ) {
+    if (domain_senders.len() > 1) {
+      // note that for our use case, noria only have at most one domain.
+      // this mean the code below is doing nothing, merely calling do_eviction of said domain.
+      // this simplify our life a bit as we do not have to modify this code - just let it does the forwarding!
+      println!("{}", domain_senders.len());
+      panic!();
+    }
     use std::cmp;
 
     // 2. add current state sizes (could be out of date, as packet sent below is not

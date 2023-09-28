@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::mem;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time;
 
 use crate::group_commit::GroupCommitQueueSet;
@@ -22,6 +22,7 @@ use stream_cancel::Valve;
 use crate::Readers;
 use timekeeper::{RealTime, SimpleTracker, ThreadTime, Timer, TimerSet};
 use tokio;
+use crate::bucket::ZombieManager;
 
 #[derive(Debug)]
 pub enum PollEvent {
@@ -202,6 +203,8 @@ impl DomainBuilder {
 
             total_replay_time: Timer::new(),
             total_forward_time: Timer::new(),
+
+	    zm: ZombieManager::new(),
         }
     }
 }
@@ -263,6 +266,9 @@ pub struct Domain {
     total_replay_time: Timer<SimpleTracker, RealTime>,
     /// time spent processing ordinary, forward updates
     total_forward_time: Timer<SimpleTracker, RealTime>,
+
+    // maybe a tokio mutex? i am following the rest of the code which use a nontokio mutex.
+    zm: ZombieManager,
 }
 
 impl Domain {
@@ -594,6 +600,7 @@ impl Domain {
                 None,
                 executor,
                 &self.log,
+		&mut self.zm,
             );
             assert_eq!(captured.len(), 0);
             self.process_ptimes.stop();
@@ -1998,6 +2005,7 @@ impl Domain {
                             Some(rp),
                             ex,
                             &self.log,
+			    &mut self.zm,
                         );
 
                         // ignore duplicate misses
@@ -2639,212 +2647,230 @@ impl Domain {
         }
     }
 
-    pub fn handle_eviction(&mut self, m: Box<Packet>, ex: &mut dyn Executor) {
-        #[allow(clippy::too_many_arguments)]
-        fn trigger_downstream_evictions(
-            log: &Logger,
-            key_columns: &[usize],
-            keys: &[Vec<DataType>],
-            node: LocalNodeIndex,
-            ex: &mut dyn Executor,
-            not_ready: &HashSet<LocalNodeIndex>,
-            replay_paths: &HashMap<Tag, ReplayPath>,
-            shard: Option<usize>,
-            state: &mut StateMap,
-            nodes: &DomainNodes,
-        ) {
-            // TODO: this is a linear walk of replay paths -- we should make that not linear
-            for (tag, ref path) in replay_paths {
-                if path.source == Some(node) {
-                    // Check whether this replay path is for the same key.
-                    match path.trigger {
-                        TriggerEndpoint::Local(ref key) | TriggerEndpoint::Start(ref key) => {
-                            // what if just key order changed?
-                            if &key[..] != key_columns {
-                                continue;
-                            }
-                        }
-                        _ => unreachable!(),
-                    };
-
-                    let mut keys = Vec::from(keys);
-                    walk_path(&path.path[..], &mut keys, *tag, shard, nodes, ex);
-
-                    if let TriggerEndpoint::Local(_) = path.trigger {
-                        let target = replay_paths[&tag].path.last().unwrap();
-                        if nodes[target.node].borrow().is_reader() {
-                            // already evicted from in walk_path
+    #[allow(clippy::too_many_arguments)]
+    fn trigger_downstream_evictions(
+        log: &Logger,
+        key_columns: &[usize],
+        keys: &[Vec<DataType>],
+        node: LocalNodeIndex,
+        ex: &mut dyn Executor,
+        not_ready: &HashSet<LocalNodeIndex>,
+        replay_paths: &HashMap<Tag, ReplayPath>,
+        shard: Option<usize>,
+        state: &mut StateMap,
+        nodes: &DomainNodes,
+    ) {
+        // TODO: this is a linear walk of replay paths -- we should make that not linear
+        for (tag, ref path) in replay_paths {
+            if path.source == Some(node) {
+                // Check whether this replay path is for the same key.
+                match path.trigger {
+                    TriggerEndpoint::Local(ref key) | TriggerEndpoint::Start(ref key) => {
+                        // what if just key order changed?
+                        if &key[..] != key_columns {
                             continue;
                         }
-                        if !state.contains_key(target.node) {
-                            // this is probably because
-                            if !not_ready.contains(&target.node) {
-                                debug!(log, "got eviction for ready but stateless node";
-                                       "node" => target.node.id());
-                            }
-                            continue;
-                        }
-
-                        state[target.node].evict_keys(*tag, &keys[..]);
-                        trigger_downstream_evictions(
-                            log,
-                            &target.partial_key.as_ref().unwrap()[..],
-                            &keys[..],
-                            target.node,
-                            ex,
-                            not_ready,
-                            replay_paths,
-                            shard,
-                            state,
-                            nodes,
-                        );
                     }
+                    _ => unreachable!(),
+                };
+
+                let mut keys = Vec::from(keys);
+                Self::walk_path(&path.path[..], &mut keys, *tag, shard, nodes, ex);
+
+                if let TriggerEndpoint::Local(_) = path.trigger {
+                    let target = replay_paths[&tag].path.last().unwrap();
+                    if nodes[target.node].borrow().is_reader() {
+                        // already evicted from in walk_path
+                        continue;
+                    }
+                    if !state.contains_key(target.node) {
+                        // this is probably because
+                        if !not_ready.contains(&target.node) {
+                            debug!(log, "got eviction for ready but stateless node";
+                                   "node" => target.node.id());
+                        }
+                        continue;
+                    }
+
+                    state[target.node].evict_keys(*tag, &keys[..]);
+                    Self::trigger_downstream_evictions(
+                        log,
+                        &target.partial_key.as_ref().unwrap()[..],
+                        &keys[..],
+                        target.node,
+                        ex,
+                        not_ready,
+                        replay_paths,
+                        shard,
+                        state,
+                        nodes,
+                    );
                 }
             }
         }
+    }
 
-        fn walk_path(
-            path: &[ReplayPathSegment],
-            keys: &mut Vec<Vec<DataType>>,
-            tag: Tag,
-            shard: Option<usize>,
-            nodes: &DomainNodes,
-            executor: &mut dyn Executor,
-        ) {
-            let mut from = path[0].node;
-            for segment in path {
-                nodes[segment.node].borrow_mut().process_eviction(
-                    from,
-                    &segment.partial_key.as_ref().unwrap()[..],
-                    keys,
-                    tag,
-                    shard,
-                    executor,
-                );
-                from = segment.node;
+    fn walk_path(
+        path: &[ReplayPathSegment],
+        keys: &mut Vec<Vec<DataType>>,
+        tag: Tag,
+        shard: Option<usize>,
+        nodes: &DomainNodes,
+        executor: &mut dyn Executor,
+    ) {
+        let mut from = path[0].node;
+        for segment in path {
+            nodes[segment.node].borrow_mut().process_eviction(
+                from,
+                &segment.partial_key.as_ref().unwrap()[..],
+                keys,
+                tag,
+                shard,
+                executor,
+            );
+            from = segment.node;
+        }
+    }
+
+    pub fn evict(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
+        if (true) {
+	    self.evict_baseline(num_bytes, ex);
+	} else {
+            self.evict_mk(num_bytes, ex);
+	}
+    }
+    
+    pub fn evict_baseline(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
+        let mut candidates: Vec<_> = self
+            .nodes
+            .values()
+            .filter_map(|nd| {
+                let n = &*nd.borrow();
+                let local_index = n.local_addr();
+
+		if n.is_reader() {
+                    let mut size = None;
+                    n.with_reader(|r| {
+                        if r.is_partial() {
+                            size = r.state_size();
+                        }
+                    })
+                    .unwrap();
+                    size.map(|s| (local_index, s))
+                } else {
+                    self.state
+                    .get(local_index)
+                    .filter(|state| state.is_partial())
+                    .map(|state| (local_index, state.deep_size_of()))
+                }
+            })
+            .filter(|&(_, s)| s > 0)
+            .map(|(x, s)| (x, s as usize))
+            .collect();
+
+        // we want to spread the eviction across the nodes,
+        // rather than emptying out one node completely.
+        // -1* so we sort in descending order
+        // TODO: be smarter than 3 here
+        candidates.sort_unstable_by_key(|&(_, s)| -1 * (s as i64));
+        candidates.truncate(3);
+
+        // don't evict from tiny things (< 10% of max)
+        if let Some(too_small_i) = candidates
+            .iter()
+            .position(|&(_, s)| s < candidates[0].1 / 10)
+        {
+            // everything beyond this is smaller, so also too small
+            candidates.truncate(too_small_i);
+        }
+
+        let mut n = candidates.len();
+        // rev to start with the smallest of the n domains
+        for (_, size) in candidates.iter_mut().rev() {
+            // TODO: should this be evenly divided, or weighted by the size of the domains?
+            let share = (num_bytes + n - 1) / n;
+            // we're only willing to evict at most half the state in each node
+            // unless this is the only node left to evict from
+            *size = if n > 1 {
+                cmp::min(*size / 2, share)
+            } else {
+                assert_eq!(share, num_bytes);
+                share
+            };
+            num_bytes -= *size;
+            trace!(self.log, "chose to evict {}b from node {:?}", *size, n);
+            n -= 1;
+        }
+
+        for (node, size) in candidates {
+	    self.free_node(node, size, ex);
+	}
+    }
+
+    pub fn evict_mk(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
+    }
+
+    pub fn free_node(&mut self, node: LocalNodeIndex, num_bytes: usize, ex: &mut dyn Executor) {
+        let mut freed = 0u64;
+        let mut n = self.nodes[node].borrow_mut();
+        while freed < num_bytes as u64 {
+            // TODO: use (num_bytes - freed) / SOMETHING to compute # keys to evict
+            if n.is_dropped() {
+                break; // Node was dropped. Give up.
+            } else if n.is_reader() {
+                let freed_now = n.with_reader_mut(|r| r.evict_random_keys(16)).unwrap();
+
+		freed += freed_now;
+                if n.with_reader(|r| r.is_empty()).unwrap() {
+                    trace!(
+                        self.log,
+                        "done evicting from now-empty reader node {:?}",
+                        n
+                        );
+                    break;
+                }
+            } else {
+                let (key_columns, keys, bytes) = {
+                    let k = self.state[node].evict_random_keys(16);
+                    (k.0.to_vec(), k.1, k.2)
+                };
+                freed += bytes;
+
+                if !keys.is_empty() {
+                    Self::trigger_downstream_evictions(
+                        &self.log,
+			&key_columns[..],
+                    	&keys[..],
+                    	node,
+                    	ex,
+                    	&self.not_ready,
+                    	&self.replay_paths,
+                    	self.shard,
+                    	&mut self.state,
+                    	&self.nodes,
+                    );
+                }
+
+                if self.state[node].is_empty() {
+                    trace!(self.log, "done evicting from now-empty node {:?}", n);
+                    break;
+                }
             }
         }
+        debug!(self.log, "evicted {} from node {:?}", freed, n);
+        self.state_size.fetch_sub(freed as usize, Ordering::AcqRel);
+    }
+    pub fn handle_eviction(&mut self, m: Box<Packet>, ex: &mut dyn Executor) {
         match (*m,) {
             (Packet::Evict {
                 node,
                 mut num_bytes,
             },) => {
-                let nodes = if let Some(node) = node {
-                    vec![(node, num_bytes)]
-                } else {
-                    let mut candidates: Vec<_> = self
-                        .nodes
-                        .values()
-                        .filter_map(|nd| {
-                            let n = &*nd.borrow();
-                            let local_index = n.local_addr();
-
-                            if n.is_reader() {
-                                let mut size = None;
-                                n.with_reader(|r| {
-                                    if r.is_partial() {
-                                        size = r.state_size();
-                                    }
-                                })
-                                .unwrap();
-                                size.map(|s| (local_index, s))
-                            } else {
-                                self.state
-                                    .get(local_index)
-                                    .filter(|state| state.is_partial())
-                                    .map(|state| (local_index, state.deep_size_of()))
-                            }
-                        })
-                        .filter(|&(_, s)| s > 0)
-                        .map(|(x, s)| (x, s as usize))
-                        .collect();
-
-                    // we want to spread the eviction across the nodes,
-                    // rather than emptying out one node completely.
-                    // -1* so we sort in descending order
-                    // TODO: be smarter than 3 here
-                    candidates.sort_unstable_by_key(|&(_, s)| -1 * (s as i64));
-                    candidates.truncate(3);
-
-                    // don't evict from tiny things (< 10% of max)
-                    if let Some(too_small_i) = candidates
-                        .iter()
-                        .position(|&(_, s)| s < candidates[0].1 / 10)
-                    {
-                        // everything beyond this is smaller, so also too small
-                        candidates.truncate(too_small_i);
-                    }
-
-                    let mut n = candidates.len();
-                    // rev to start with the smallest of the n domains
-                    for (_, size) in candidates.iter_mut().rev() {
-                        // TODO: should this be evenly divided, or weighted by the size of the domains?
-                        let share = (num_bytes + n - 1) / n;
-                        // we're only willing to evict at most half the state in each node
-                        // unless this is the only node left to evict from
-                        *size = if n > 1 {
-                            cmp::min(*size / 2, share)
-                        } else {
-                            assert_eq!(share, num_bytes);
-                            share
-                        };
-                        num_bytes -= *size;
-                        trace!(self.log, "chose to evict {}b from node {:?}", *size, n);
-                        n -= 1;
-                    }
-
-                    candidates
-                };
-
-                for (node, num_bytes) in nodes {
-                    let mut freed = 0u64;
-                    let mut n = self.nodes[node].borrow_mut();
-                    while freed < num_bytes as u64 {
-                        // TODO: use (num_bytes - freed) / SOMETHING to compute # keys to evict
-                        if n.is_dropped() {
-                            break; // Node was dropped. Give up.
-                        } else if n.is_reader() {
-                            let freed_now = n.with_reader_mut(|r| r.evict_random_keys(16)).unwrap();
-
-                            freed += freed_now;
-                            if n.with_reader(|r| r.is_empty()).unwrap() {
-                                trace!(
-                                    self.log,
-                                    "done evicting from now-empty reader node {:?}",
-                                    n
-                                );
-                                break;
-                            }
-                        } else {
-                            let (key_columns, keys, bytes) = {
-                                let k = self.state[node].evict_random_keys(16);
-                                (k.0.to_vec(), k.1, k.2)
-                            };
-                            freed += bytes;
-
-                            if !keys.is_empty() {
-                                trigger_downstream_evictions(
-                                    &self.log,
-                                    &key_columns[..],
-                                    &keys[..],
-                                    node,
-                                    ex,
-                                    &self.not_ready,
-                                    &self.replay_paths,
-                                    self.shard,
-                                    &mut self.state,
-                                    &self.nodes,
-                                );
-                            }
-                            if self.state[node].is_empty() {
-                                trace!(self.log, "done evicting from now-empty node {:?}", n);
-                                break;
-                            }
-                        }
-                    }
-                    debug!(self.log, "evicted {} from node {:?}", freed, n);
-                    self.state_size.fetch_sub(freed as usize, Ordering::AcqRel);
-                }
+	        if let Some(node) = node {
+		    self.free_node(node, num_bytes, ex);
+		} else {
+		    self.evict(num_bytes, ex);
+		}
             }
             (Packet::EvictKeys {
                 link: Link { dst, .. },
@@ -2863,7 +2889,7 @@ impl Domain {
                     .iter()
                     .position(|ps| ps.node == dst)
                     .expect("got eviction for non-local node");
-                walk_path(&path[i..], &mut keys, tag, self.shard, &mut self.nodes, ex);
+                Self::walk_path(&path[i..], &mut keys, tag, self.shard, &mut self.nodes, ex);
 
                 match trigger {
                     TriggerEndpoint::End { .. } | TriggerEndpoint::Local(..) => {
@@ -2880,7 +2906,7 @@ impl Domain {
                         }
                         if let Some(evicted) = self.state[target].evict_keys(tag, &keys) {
                             let key_columns = evicted.0.to_vec();
-                            trigger_downstream_evictions(
+                            Self::trigger_downstream_evictions(
                                 &self.log,
                                 &key_columns[..],
                                 &keys[..],
@@ -2942,6 +2968,9 @@ impl Domain {
             .sum();
 
         self.state_size.store(total as usize, Ordering::Release);
+	if total > 0 {
+          // println!("update_state_sizes: {total}");
+	}
         // no response sent, as worker will read the atomic
     }
 

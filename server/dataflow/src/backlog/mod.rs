@@ -4,6 +4,10 @@ use common::SizeOf;
 use rand::prelude::*;
 use std::borrow::Cow;
 use std::sync::Arc;
+use crate::bucket::*;
+use zombie_sys::*;
+use common::Record::*;
+use std::time::Instant;
 
 /// Allocate a new end-user facing result table.
 pub(crate) fn new(cols: usize, key: &[usize]) -> (SingleReadHandle, WriteHandle) {
@@ -235,11 +239,26 @@ impl WriteHandle {
     /// Add a new set of records to the backlog.
     ///
     /// These will be made visible to readers after the next call to `swap()`.
-    pub(crate) fn add<I>(&mut self, rs: I)
-    where
-        I: IntoIterator<Item = Record>,
+    pub(crate) fn add(&mut self, rs: Records, zm: &mut ZombieManager, b: Bucket)
     {
-        let mem_delta = self.handle.add(&self.key[..], self.cols, rs);
+        // the below code cause perf regression. but the good news is readers only take a fraction of memory - so we can just ignore!
+    	if self.is_partial() {
+          (**rs).into_iter().for_each(|r|
+          match r {
+            Positive(v) => {
+	      zm.seen_add += v.len();
+            }
+            Negative(v) => { zm.seen_rm += v.len() }
+          });
+          zm.seen_materialize += 1;
+          zm.kh.push(0, &AffFunction::new(1, -(zm.created_time.elapsed().as_millis() as i64)));
+          if (zm.last_print.elapsed().as_secs() >= 10) {
+            zm.last_print = Instant::now();
+            println!("{:?}, {:?}, {:?}", zm.seen_add, zm.seen_rm, zm.seen_materialize);
+          }
+        }
+
+        let mem_delta = self.handle.add(&self.key[..], self.cols, rs, zm, b);
         if mem_delta > 0 {
             self.mem_size += mem_delta as usize;
         } else if mem_delta < 0 {

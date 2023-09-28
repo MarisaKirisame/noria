@@ -5,6 +5,7 @@ use rand::{self, Rng};
 
 use crate::prelude::*;
 use crate::state::single_state::SingleState;
+use crate::state::Bucket;
 use common::SizeOf;
 
 #[derive(Default)]
@@ -61,7 +62,7 @@ impl State for MemoryState {
                 assert!(!old[0].partial());
                 for rs in old[0].values() {
                     for r in rs {
-                        new.insert_row(Row::from(r.0.clone()));
+                        new.insert_row(r.clone());
                     }
                 }
             }
@@ -76,7 +77,7 @@ impl State for MemoryState {
         self.state.iter().any(SingleState::partial)
     }
 
-    fn process_records(&mut self, records: &mut Records, partial_tag: Option<Tag>) {
+    fn process_records(&mut self, records: &mut Records, partial_tag: Option<Tag>, b: Bucket) {
         if self.is_partial() {
             records.retain(|r| {
                 // we need to check that we're not erroneously filling any holes
@@ -94,7 +95,7 @@ impl State for MemoryState {
                 //    XXX: we could potentially save come computation here in joins by not forcing
                 //    `right` to backfill the lookup key only to then throw the record away
                 match *r {
-                    Record::Positive(ref r) => self.insert(r.clone(), partial_tag),
+                    Record::Positive(ref r) => self.insert(r.clone(), partial_tag, b),
                     Record::Negative(ref r) => self.remove(r),
                 }
             });
@@ -102,7 +103,7 @@ impl State for MemoryState {
             for r in records.iter() {
                 match *r {
                     Record::Positive(ref r) => {
-                        let hit = self.insert(r.clone(), None);
+                        let hit = self.insert(r.clone(), None, b);
                         debug_assert!(hit);
                     }
                     Record::Negative(ref r) => {
@@ -187,8 +188,8 @@ impl MemoryState {
         self.state.iter().position(|s| s.key() == cols)
     }
 
-    fn insert(&mut self, r: Vec<DataType>, partial_tag: Option<Tag>) -> bool {
-        let r = Rc::new(r);
+    fn insert(&mut self, r: Vec<DataType>, partial_tag: Option<Tag>, b: Bucket) -> bool {
+        let r = Row::from(Rc::new(r));
 
         if let Some(tag) = partial_tag {
             let i = match self.by_tag.get(&tag) {
@@ -201,14 +202,15 @@ impl MemoryState {
                 }
             };
             self.mem_size += r.deep_size_of();
-            self.state[i].insert_row(Row::from(r))
+            self.state[i].insert_row(r)
         } else {
             let mut hit_any = false;
+	    let ms = r.deep_size_of();
             for i in 0..self.state.len() {
-                hit_any |= self.state[i].insert_row(Row::from(r.clone()));
+                hit_any |= self.state[i].insert_row(r.clone());
             }
             if hit_any {
-                self.mem_size += r.deep_size_of();
+                self.mem_size += ms;
             }
             hit_any
         }

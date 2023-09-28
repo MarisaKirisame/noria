@@ -14,6 +14,7 @@ use ahash::RandomState;
 use common::SizeOf;
 use hashbag::HashBag;
 
+use crate::bucket::*;
 pub(crate) use self::memory_state::MemoryState;
 pub(crate) use self::persistent_state::PersistentState;
 
@@ -29,7 +30,7 @@ pub(crate) trait State: SizeOf + Send {
 
     // Inserts or removes each record into State. Records that miss all indices in partial state
     // are removed from `records` (thus the mutable reference).
-    fn process_records(&mut self, records: &mut Records, partial_tag: Option<Tag>);
+    fn process_records(&mut self, records: &mut Records, partial_tag: Option<Tag>, b: Bucket);
 
     fn mark_hole(&mut self, key: &[DataType], tag: Tag);
 
@@ -62,8 +63,8 @@ pub(crate) type Rows = HashBag<Row, RandomState>;
 
 unsafe impl Send for Row {}
 
-impl From<Rc<Vec<DataType>>> for Row {
-    fn from(r: Rc<Vec<DataType>>) -> Self {
+impl From<(Rc<Vec<DataType>>)> for Row {
+    fn from(r: (Rc<Vec<DataType>>)) -> Self {
         Self(r)
     }
 }

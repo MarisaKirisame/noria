@@ -16,7 +16,7 @@ pub mod topk;
 pub mod trigger;
 pub mod union;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum NodeOperator {
     Sum(grouped::GroupedOperator<grouped::aggregate::Aggregator>),

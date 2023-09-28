@@ -4,6 +4,11 @@ use crate::prelude::*;
 use slog::Logger;
 use std::collections::HashSet;
 use std::mem;
+use crate::bucket::Bucket;
+use crate::bucket::ZombieManager;
+use common::Record::*;
+use std::time;
+use zombie_sys::*;
 
 impl Node {
     #[allow(clippy::too_many_arguments)]
@@ -18,7 +23,9 @@ impl Node {
         replay_path: Option<&crate::domain::ReplayPath>,
         ex: &mut dyn Executor,
         log: &Logger,
+	zm: &mut ZombieManager,
     ) -> (Vec<Miss>, Vec<Lookup>, HashSet<Vec<DataType>>) {
+        let bucket = zm.get_bucket();
         let addr = self.local_addr();
         let gaddr = self.global_addr();
         match self.inner {
@@ -26,7 +33,7 @@ impl Node {
                 let m = m.as_mut().unwrap();
                 let tag = m.tag();
                 m.map_data(|rs| {
-                    materialize(rs, tag, state.get_mut(addr));
+                    materialize(rs, tag, state.get_mut(addr), zm, bucket);
                 });
             }
             NodeType::Base(ref mut b) => {
@@ -46,7 +53,7 @@ impl Node {
                         //
                         // So: only materialize if the message we're processing is not a replay!
                         if keyed_by.is_none() {
-                            materialize(&mut rs, None, state.get_mut(addr));
+                            materialize(&mut rs, None, state.get_mut(addr), zm, bucket);
                         }
 
                         // Send write-ACKs to all the clients with updates that made
@@ -66,7 +73,7 @@ impl Node {
                 }
             }
             NodeType::Reader(ref mut r) => {
-                r.process(m, swap);
+                r.process(m, swap, zm);
             }
             NodeType::Egress(None) => unreachable!(),
             NodeType::Egress(Some(ref mut e)) => {
@@ -129,7 +136,6 @@ impl Node {
                     let mut set_replay_last = None;
                     // we need to own the data
                     let old_data = mem::take(data);
-
                     match i.on_input_raw(ex, from, old_data, replay, nodes, state, log) {
                         RawProcessingResult::Regular(m) => {
                             *data = m.results;
@@ -237,7 +243,7 @@ impl Node {
                     _ => None,
                 };
                 m.map_data(|rs| {
-                    materialize(rs, tag, state.get_mut(addr));
+                    materialize(rs, tag, state.get_mut(addr), zm, bucket);
                 });
 
                 for miss in misses.iter_mut() {
@@ -245,7 +251,6 @@ impl Node {
                         reroute_miss(nodes, miss);
                     }
                 }
-
                 return (misses, lookups, captured);
             }
             NodeType::Dropped => {
@@ -341,6 +346,8 @@ pub(crate) fn materialize(
     rs: &mut Records,
     partial: Option<Tag>,
     state: Option<&mut Box<dyn State>>,
+    zm: &mut ZombieManager,
+    b: Bucket,
 ) {
     // our output changed -- do we need to modify materialized state?
     if state.is_none() {
@@ -349,5 +356,22 @@ pub(crate) fn materialize(
     }
 
     // yes!
-    state.unwrap().process_records(rs, partial);
+    let s = state.unwrap();
+    if s.is_partial() {
+      (**rs).iter().for_each(|r|
+        match r {
+	  Positive(v) => {
+	    zm.seen_add += v.len();
+	  }
+	  Negative(v) => { zm.seen_rm += v.len() }
+	});
+      zm.seen_materialize += 1;
+      zm.kh.push(0, &AffFunction::new(1, -(zm.created_time.elapsed().as_millis() as i64)));
+      if (zm.last_print.elapsed().as_secs() >= 10) {
+        zm.last_print = time::Instant::now();
+        println!("{:?}, {:?}, {:?}", zm.seen_add, zm.seen_rm, zm.seen_materialize);
+      }
+    }
+    s.process_records(rs, partial, b);
+
 }

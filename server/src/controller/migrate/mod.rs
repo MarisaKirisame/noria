@@ -142,6 +142,7 @@ impl<'a> Migration<'a> {
     /// marked.
     #[cfg(test)]
     pub(crate) fn mark_shallow(&mut self, ni: NodeIndex) {
+        panic!();
         info!(self.log,
               "marking node as beyond materialization frontier";
               "node" => ni.index(),

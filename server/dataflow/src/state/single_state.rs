@@ -4,6 +4,7 @@ use crate::state::keyed_state::KeyedState;
 use common::SizeOf;
 use rand::prelude::*;
 use std::rc::Rc;
+use crate::state::Bucket;
 
 pub(super) struct SingleState {
     key: Vec<usize>,
@@ -13,7 +14,7 @@ pub(super) struct SingleState {
 }
 
 macro_rules! insert_row_match_impl {
-    ($self:ident, $r:ident, $map:ident) => {{
+    ($self:ident, $map:ident, $r:ident) => {{
         let key = MakeKey::from_row(&$self.key, &*$r);
         match $map.entry(key) {
             Entry::Occupied(mut rs) => {
@@ -67,13 +68,12 @@ impl SingleState {
                 }
                 map.insert(r[self.key[0]].clone(), std::iter::once(r).collect());
             }
-            KeyedState::Double(ref mut map) => insert_row_match_impl!(self, r, map),
-            KeyedState::Tri(ref mut map) => insert_row_match_impl!(self, r, map),
-            KeyedState::Quad(ref mut map) => insert_row_match_impl!(self, r, map),
-            KeyedState::Quin(ref mut map) => insert_row_match_impl!(self, r, map),
-            KeyedState::Sex(ref mut map) => insert_row_match_impl!(self, r, map),
-        }
-
+            KeyedState::Double(ref mut map) => insert_row_match_impl!(self, map, r),
+            KeyedState::Tri(ref mut map) => insert_row_match_impl!(self, map, r),
+            KeyedState::Quad(ref mut map) => insert_row_match_impl!(self, map, r),
+            KeyedState::Quin(ref mut map) => insert_row_match_impl!(self, map, r),
+            KeyedState::Sex(ref mut map) => insert_row_match_impl!(self, map, r),
+	}
         self.rows += 1;
         true
     }

@@ -1,5 +1,6 @@
 use super::{key_to_double, key_to_single, Key};
 use crate::prelude::*;
+use crate::bucket::*;
 use ahash::RandomState;
 use evmap;
 
@@ -126,7 +127,7 @@ impl Handle {
         }
     }
 
-    pub fn add<I>(&mut self, key: &[usize], cols: usize, rs: I) -> isize
+    pub fn add<I>(&mut self, key: &[usize], cols: usize, rs: I, zm: &mut ZombieManager, b: Bucket) -> isize
     where
         I: IntoIterator<Item = Record>,
     {
