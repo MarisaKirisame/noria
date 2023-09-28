@@ -189,7 +189,7 @@ impl MemoryState {
     }
 
     fn insert(&mut self, r: Vec<DataType>, partial_tag: Option<Tag>, b: Bucket) -> bool {
-        let r = Row::from(Rc::new(r));
+        let r = Rc::new(r);
 
         if let Some(tag) = partial_tag {
             let i = match self.by_tag.get(&tag) {
@@ -202,15 +202,14 @@ impl MemoryState {
                 }
             };
             self.mem_size += r.deep_size_of();
-            self.state[i].insert_row(r)
+            self.state[i].insert_row(Row::from(r))
         } else {
             let mut hit_any = false;
-	    let ms = r.deep_size_of();
             for i in 0..self.state.len() {
-                hit_any |= self.state[i].insert_row(r.clone());
+                hit_any |= self.state[i].insert_row(Row::from(r.clone()));
             }
             if hit_any {
-                self.mem_size += ms;
+                self.mem_size += r.deep_size_of();
             }
             hit_any
         }
