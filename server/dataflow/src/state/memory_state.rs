@@ -22,7 +22,7 @@ impl SizeOf for MemoryState {
         size_of::<Self>() as u64
     }
 
-    fn deep_size_of(&self) -> u64 {
+    fn deep_size_of_impl(&self) -> u64 {
         self.mem_size
     }
 
@@ -189,7 +189,7 @@ impl MemoryState {
     }
 
     fn insert(&mut self, r: Vec<DataType>, partial_tag: Option<Tag>, b: Bucket) -> bool {
-        let r = Rc::new(r);
+        let r = Row::from((Rc::new(r), b));
 
         if let Some(tag) = partial_tag {
             let i = match self.by_tag.get(&tag) {
@@ -202,11 +202,11 @@ impl MemoryState {
                 }
             };
             self.mem_size += r.deep_size_of();
-            self.state[i].insert_row(Row::from(r))
+            self.state[i].insert_row(r)
         } else {
             let mut hit_any = false;
             for i in 0..self.state.len() {
-                hit_any |= self.state[i].insert_row(Row::from(r.clone()));
+                hit_any |= self.state[i].insert_row(r.clone());
             }
             if hit_any {
                 self.mem_size += r.deep_size_of();

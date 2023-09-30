@@ -595,7 +595,7 @@ impl SizeOf for PersistentState {
         size_of::<Self>() as u64
     }
 
-    fn deep_size_of(&self) -> u64 {
+    fn deep_size_of_impl(&self) -> u64 {
         let db = self.db.as_ref().unwrap();
         db.property_int_value("rocksdb.estimate-live-data-size")
             .unwrap()

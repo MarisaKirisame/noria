@@ -8,11 +8,14 @@ use std::borrow::Cow;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
+use std::mem::size_of;
+use std::hash::Hash;
 
 use crate::prelude::*;
 use ahash::RandomState;
 use common::SizeOf;
 use hashbag::HashBag;
+use std::hash::Hasher;
 
 use crate::bucket::*;
 pub(crate) use self::memory_state::MemoryState;
@@ -56,16 +59,26 @@ pub(crate) trait State: SizeOf + Send {
     fn clear(&mut self);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub(crate) struct Row(Rc<Vec<DataType>>);
+#[derive(Clone, Debug)]
+pub(crate) struct Row(Rc<Vec<DataType>>, Bucket);
+
+impl Eq for Row {}
+
+impl Hash for Row {
+  fn hash<H>(&self, h: &mut H) where H: Hasher { self.0.hash(h) }
+}
+
+impl PartialEq for Row {
+  fn eq(&self, rhs: &Row) -> bool { self.0.eq(&rhs.0) }
+}
 
 pub(crate) type Rows = HashBag<Row, RandomState>;
 
 unsafe impl Send for Row {}
 
-impl From<(Rc<Vec<DataType>>)> for Row {
-    fn from(r: (Rc<Vec<DataType>>)) -> Self {
-        Self(r)
+impl From<(Rc<Vec<DataType>>, Bucket)> for Row {
+    fn from(r: (Rc<Vec<DataType>>, Bucket)) -> Self {
+        Self(r.0, r.1)
     }
 }
 
@@ -89,11 +102,10 @@ impl Deref for Row {
 }
 impl SizeOf for Row {
     fn size_of(&self) -> u64 {
-        use std::mem::size_of;
         size_of::<Self>() as u64
     }
-    fn deep_size_of(&self) -> u64 {
-        (*self.0).deep_size_of()
+    fn deep_size_of_impl(&self) -> u64 {
+        (*(self.0)).deep_size_of()
     }
     fn is_empty(&self) -> bool {
         false

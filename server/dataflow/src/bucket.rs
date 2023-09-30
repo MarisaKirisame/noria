@@ -1,6 +1,8 @@
 use crate::prelude::*;
 use std::time;
 use zombie_sys::*;
+use std::fs::File;
+use std::fs::OpenOptions;
 
 // a bucket is the smallest unit of memory management.
 // every process() shall create a new bucket.
@@ -21,6 +23,7 @@ pub struct ZombieManager {
   pub kh: KineticHanger<u32>,
   pub created_time: time::Instant,
   pub fresh_bucket: usize,
+  pub log: File,
 }
 
 impl ZombieManager {
@@ -42,6 +45,10 @@ impl ZombieManager {
       kh: KineticHanger::new(),
       created_time: time::Instant::now(),
       fresh_bucket: 0,
+      log: OpenOptions::new().write(true)
+			     .create(true)
+                             .truncate(true)
+                             .open("zombie.log").unwrap(),
     }
   }
 }

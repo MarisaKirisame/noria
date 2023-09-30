@@ -242,7 +242,7 @@ impl WriteHandle {
     pub(crate) fn add(&mut self, rs: Records, zm: &mut ZombieManager, b: Bucket)
     {
         // the below code cause perf regression. but the good news is readers only take a fraction of memory - so we can just ignore!
-    	if self.is_partial() {
+    	if false && self.is_partial() {
           (**rs).into_iter().for_each(|r|
           match r {
             Positive(v) => {
@@ -262,6 +262,12 @@ impl WriteHandle {
         if mem_delta > 0 {
             self.mem_size += mem_delta as usize;
         } else if mem_delta < 0 {
+	    if self.mem_size == 0 {
+	      assert!(self.handle.is_empty());
+	    }
+	    if self.mem_size < mem_delta.abs() as usize {
+	      println!("{}, {}", self.mem_size, mem_delta);
+	    }
             self.mem_size = self
                 .mem_size
                 .checked_sub(mem_delta.checked_abs().unwrap() as usize)
@@ -304,7 +310,7 @@ impl SizeOf for WriteHandle {
         size_of::<Self>() as u64
     }
 
-    fn deep_size_of(&self) -> u64 {
+    fn deep_size_of_impl(&self) -> u64 {
         self.mem_size as u64
     }
 

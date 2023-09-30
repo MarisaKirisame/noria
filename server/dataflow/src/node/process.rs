@@ -9,6 +9,8 @@ use crate::bucket::ZombieManager;
 use common::Record::*;
 use std::time;
 use zombie_sys::*;
+use std::convert::TryInto;
+use std::io::Write;
 
 impl Node {
     #[allow(clippy::too_many_arguments)]
@@ -358,18 +360,26 @@ pub(crate) fn materialize(
     // yes!
     let s = state.unwrap();
     if s.is_partial() {
+      let mut mem_usage = 0u64;
       (**rs).iter().for_each(|r|
         match r {
 	  Positive(v) => {
-	    zm.seen_add += v.len();
+	    zm.seen_add += 1;
+	    mem_usage += v.deep_size_of();
 	  }
-	  Negative(v) => { zm.seen_rm += v.len() }
+	  Negative(v) => { zm.seen_rm += 1 }
 	});
       zm.seen_materialize += 1;
-      zm.kh.push(0, &AffFunction::new(1, -(zm.created_time.elapsed().as_millis() as i64)));
+      if (mem_usage > 0) {
+        let t = zm.created_time.elapsed().as_millis() as i64;
+	serde_json::to_writer(&zm.log, &serde_json::json!({"mem_usage":mem_usage, "t": t})).unwrap();
+	writeln!(&zm.log).unwrap();
+	//zm.kh.advance_to(t);
+        //zm.kh.push(0, &AffFunction::new((10000 / mem_usage).try_into().unwrap(), -t));
+      }
       if (zm.last_print.elapsed().as_secs() >= 10) {
         zm.last_print = time::Instant::now();
-        println!("{:?}, {:?}, {:?}", zm.seen_add, zm.seen_rm, zm.seen_materialize);
+        println!("{:?}, {:?}, {:?}, {:?}", zm.seen_add, zm.seen_rm, zm.seen_materialize, zm.kh.len());
       }
     }
     s.process_records(rs, partial, b);
