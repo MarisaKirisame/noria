@@ -11,6 +11,9 @@ use std::time;
 use zombie_sys::*;
 use std::convert::TryInto;
 use std::io::Write;
+use zombie_sys::KineticHeap;
+use crate::bucket::KHEntry;
+use std::time::Duration;
 
 impl Node {
     #[allow(clippy::too_many_arguments)]
@@ -30,12 +33,15 @@ impl Node {
         let bucket = zm.get_bucket();
         let addr = self.local_addr();
         let gaddr = self.global_addr();
+	let mut duration : Option<Duration> = None;
         match self.inner {
             NodeType::Ingress => {
-                let m = m.as_mut().unwrap();
+               let m = m.as_mut().unwrap(); 
                 let tag = m.tag();
+		// todo: find out what happend when we evict ingress.
+		// I did some simple profiling. look like this case is small. can just ignore.
                 m.map_data(|rs| {
-                    materialize(rs, tag, state.get_mut(addr), zm, bucket);
+                    materialize(addr, rs, tag, state.get_mut(addr), zm, None, bucket);
                 });
             }
             NodeType::Base(ref mut b) => {
@@ -55,7 +61,7 @@ impl Node {
                         //
                         // So: only materialize if the message we're processing is not a replay!
                         if keyed_by.is_none() {
-                            materialize(&mut rs, None, state.get_mut(addr), zm, bucket);
+                            materialize(addr, &mut rs, None, state.get_mut(addr), zm, None, bucket);
                         }
 
                         // Send write-ACKs to all the clients with updates that made
@@ -138,7 +144,10 @@ impl Node {
                     let mut set_replay_last = None;
                     // we need to own the data
                     let old_data = mem::take(data);
-                    match i.on_input_raw(ex, from, old_data, replay, nodes, state, log) {
+		    let b4 = time::Instant::now();
+		    let oir = i.on_input_raw(ex, from, old_data, replay, nodes, state, log);
+		    duration = Some(b4.elapsed());
+                    match oir {
                         RawProcessingResult::Regular(m) => {
                             *data = m.results;
                             lookups = m.lookups;
@@ -245,7 +254,7 @@ impl Node {
                     _ => None,
                 };
                 m.map_data(|rs| {
-                    materialize(rs, tag, state.get_mut(addr), zm, bucket);
+                    materialize(addr, rs, tag, state.get_mut(addr), zm, duration, bucket);
                 });
 
                 for miss in misses.iter_mut() {
@@ -345,10 +354,12 @@ fn reroute_miss(nodes: &DomainNodes, miss: &mut Miss) {
 #[allow(clippy::borrowed_box)]
 // crate visibility due to use by tests
 pub(crate) fn materialize(
+    idx: LocalNodeIndex,
     rs: &mut Records,
     partial: Option<Tag>,
     state: Option<&mut Box<dyn State>>,
     zm: &mut ZombieManager,
+    time_taken: Option<Duration>,
     b: Bucket,
 ) {
     // our output changed -- do we need to modify materialized state?
@@ -359,7 +370,7 @@ pub(crate) fn materialize(
 
     // yes!
     let s = state.unwrap();
-    if s.is_partial() {
+    if ZombieManager::use_zombie() && s.is_partial() && time_taken.is_some() {
       let mut mem_usage = 0u64;
       (**rs).iter().for_each(|r|
         match r {
@@ -371,11 +382,11 @@ pub(crate) fn materialize(
 	});
       zm.seen_materialize += 1;
       if (mem_usage > 0) {
-        let t = zm.created_time.elapsed().as_millis() as i64;
-	serde_json::to_writer(&zm.log, &serde_json::json!({"mem_usage":mem_usage, "t": t})).unwrap();
-	writeln!(&zm.log).unwrap();
-	//zm.kh.advance_to(t);
-        //zm.kh.push(0, &AffFunction::new((10000 / mem_usage).try_into().unwrap(), -t));
+        let t = zm.get_time() as i64;
+	//serde_json::to_writer(&zm.log, &serde_json::json!({"mem_usage":mem_usage, "t": t})).unwrap();
+	//writeln!(&zm.log).unwrap();
+	let slope : i128 = -(TryInto::<i128>::try_into((10000 * time_taken.unwrap().as_millis() as u128 / (mem_usage as u128))).unwrap());
+        zm.kh.push(KHEntry {idx, b:b, mem:mem_usage as usize}, &AffFunction::new(slope, -t));
       }
       if (zm.last_print.elapsed().as_secs() >= 10) {
         zm.last_print = time::Instant::now();

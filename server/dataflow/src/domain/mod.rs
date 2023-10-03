@@ -23,6 +23,9 @@ use crate::Readers;
 use timekeeper::{RealTime, SimpleTracker, ThreadTime, Timer, TimerSet};
 use tokio;
 use crate::bucket::ZombieManager;
+use zombie_sys::KineticHeap;
+use std::convert::TryInto;
+use crate::bucket::*;
 
 #[derive(Debug)]
 pub enum PollEvent {
@@ -2733,7 +2736,7 @@ impl Domain {
     }
 
     pub fn evict(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
-        if (true) {
+        if !ZombieManager::use_zombie() {
 	    self.evict_baseline(num_bytes, ex);
 	} else {
             self.evict_mk(num_bytes, ex);
@@ -2807,7 +2810,39 @@ impl Domain {
 	}
     }
 
+    pub fn buffer_evict(&mut self, khe: KHEntry) -> usize {
+      let mut sb = &mut self.zm.buffer;
+      if !sb.map.contains_key(&khe.idx) {
+        sb.map.insert(khe.idx, EvictEntry {b: HashSet::new(), mem:0});
+      }
+
+      let mut ee = sb.map.get_mut(&khe.idx).unwrap();
+      let freshly_inserted = ee.b.insert(khe.b);
+      assert!(freshly_inserted);
+      ee.mem += khe.mem;
+      let st = self.state.get_mut(khe.idx).unwrap();
+      if ee.mem * 10 >= st.deep_size_of().try_into().unwrap() {
+	let ret = st.evict_bucket(&ee.b);
+	sb.map.remove(&khe.idx);
+	ret
+      } else {
+        0
+      }
+    }
+
     pub fn evict_mk(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
+      let t = self.zm.get_time().try_into().unwrap();
+      self.zm.kh.advance_to(t);
+      let mut freed_bytes = 0;
+      self.report_state_sizes();
+      while freed_bytes < num_bytes && (!self.zm.kh.is_empty()) {
+        let len = self.zm.kh.len();
+	if len % 10000 == 0 {
+          println!("{}", len);
+	}
+	let entry = self.zm.kh.pop();
+	freed_bytes += self.buffer_evict(entry);
+      }
     }
 
     pub fn free_node(&mut self, node: LocalNodeIndex, num_bytes: usize, ex: &mut dyn Executor) {
@@ -2938,9 +2973,8 @@ impl Domain {
             .unwrap();
     }
 
-    pub fn update_state_sizes(&mut self) {
-        let total: u64 = self
-            .nodes
+    pub fn get_state_sizes(&self, partial_only: bool) -> u64 {
+        self.nodes
             .values()
             .map(|nd| {
                 let n = &*nd.borrow();
@@ -2950,7 +2984,7 @@ impl Domain {
                     // We are a reader, which has its own kind of state
                     let mut size = 0;
                     n.with_reader(|r| {
-                        if r.is_partial() {
+                        if r.is_partial() || (!partial_only) {
                             size = r.state_size().unwrap_or(0)
                         }
                     })
@@ -2960,18 +2994,45 @@ impl Domain {
                     // Not a reader, state is with domain
                     self.state
                         .get(local_index)
-                        .filter(|state| state.is_partial())
+                        .filter(|state| state.is_partial() || (!partial_only))
                         .map(|s| s.deep_size_of())
                         .unwrap_or(0)
                 }
             })
-            .sum();
+            .sum()
+    }
 
-        self.state_size.store(total as usize, Ordering::Release);
-	if total > 0 {
-          // println!("update_state_sizes: {total}");
-	}
-        // no response sent, as worker will read the atomic
+    // todo: make more stuff partial.
+    pub fn report_state_sizes(&mut self) {
+      for nd in self.nodes.values() {
+        let n = &*nd.borrow();
+        let local_index = n.local_addr();
+        let (partial, size) = if n.is_reader() {
+          let mut size = 0;
+          let mut partial = false;
+          n.with_reader(|r| {
+            partial = r.is_partial();
+            size = r.state_size().unwrap_or(0)
+          }).unwrap();
+          (partial, size)
+        } else {
+          // Not a reader, state is with domain
+          self.state
+            .get(local_index)
+            .map(|s| (s.is_partial(), s.deep_size_of()))
+            .unwrap_or((true, 0))
+        };
+	if (size > 0) {
+          println!("{}:{}:{}:{}", n.name(), size, n.description(false), partial);
+        }
+      }
+      println!("total_state_size: {}", self.get_state_sizes(false));
+      println!("partial_state_size: {}", self.get_state_sizes(true));
+    }
+    
+    pub fn update_state_sizes(&mut self) {
+        let partial = self.get_state_sizes(true);
+        self.state_size.store(partial as usize, Ordering::Release);
     }
 
     pub fn on_event(&mut self, executor: &mut dyn Executor, event: PollEvent) -> ProcessResult {

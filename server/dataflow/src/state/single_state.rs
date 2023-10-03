@@ -5,6 +5,7 @@ use common::SizeOf;
 use rand::prelude::*;
 use std::rc::Rc;
 use crate::state::Bucket;
+use std::collections::HashSet;
 
 pub(super) struct SingleState {
     key: Vec<usize>,
@@ -46,6 +47,11 @@ impl SingleState {
             partial,
             rows: 0,
         }
+    }
+
+    pub fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> usize {
+        assert!(self.partial);
+        self.state.evict_bucket(b)
     }
 
     /// Inserts the given record, or returns false if a hole was encountered (and the record hence

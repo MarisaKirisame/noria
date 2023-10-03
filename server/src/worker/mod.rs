@@ -383,7 +383,7 @@ async fn do_eviction(
     coord: &ChannelCoordinator,
     state_sizes: &Arc<Mutex<HashMap<(DomainIndex, usize), Arc<AtomicUsize>>>>,
 ) {
-    if (domain_senders.len() > 1) {
+    if false && domain_senders.len() > 1 {
       // note that for our use case, noria only have at most one domain.
       // this mean the code below is doing nothing, merely calling do_eviction of said domain.
       // this simplify our life a bit as we do not have to modify this code - just let it does the forwarding!

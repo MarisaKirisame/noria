@@ -4,6 +4,7 @@ use crate::prelude::*;
 use petgraph;
 use std::collections::{HashMap, HashSet};
 use std::ops::{Deref, DerefMut};
+use crate::node::NodeType::*;
 
 mod process;
 #[cfg(test)]
@@ -164,7 +165,17 @@ impl Node {
     ///    ⋉    |  Left join
     ///    ⋃    |  Union
     pub fn description(&self, detailed: bool) -> String {
-        Ingredient::description(&**self, detailed)
+        match self.inner {
+	  Ingress => "Ingress".to_string(),
+          Base(_) => "Base".to_string(),
+          Internal(_) => Ingredient::description(&**self, false),
+          Egress(_) => "Egress".to_string(),
+          Sharder(_) => "Sharder".to_string(),
+          Reader(_) => "Reader".to_string(),
+          Source => "Source".to_string(),
+          Dropped => "Dropped".to_string(),
+        }
+        //Ingredient::description(&**self, detailed)
     }
 }
 

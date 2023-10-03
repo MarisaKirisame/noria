@@ -7,6 +7,8 @@ use crate::prelude::*;
 use crate::state::single_state::SingleState;
 use crate::state::Bucket;
 use common::SizeOf;
+use crate::state::HashSet;
+use std::convert::TryInto;
 
 #[derive(Default)]
 pub struct MemoryState {
@@ -162,6 +164,16 @@ impl State for MemoryState {
         (self.state[index].key(), keys, bytes_freed)
     }
 
+    fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> usize {
+      let mut ret = 0;
+      for s in &mut self.state {
+        ret += s.evict_bucket(b);
+      }
+      // should it be saturating_sub?
+      self.mem_size = self.mem_size.saturating_sub(ret.try_into().unwrap());
+      ret
+    }
+    
     fn evict_keys(&mut self, tag: Tag, keys: &[Vec<DataType>]) -> Option<(&[usize], u64)> {
         // we may be told to evict from a tag that add_key hasn't been called for yet
         // this can happen if an upstream domain issues an eviction for a replay path that we have

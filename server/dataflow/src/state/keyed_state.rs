@@ -5,6 +5,8 @@ use crate::state::Bucket;
 use super::mk_key::MakeKey;
 use crate::prelude::*;
 use common::SizeOf;
+use std::collections::HashSet;
+use std::convert::TryInto;
 
 type HashMap<K, V> = IndexMap<K, V, RandomState>;
 
@@ -27,6 +29,42 @@ impl KeyedState {
             (&KeyedState::Quad(ref m), &KeyType::Quad(ref k)) => m.get(k),
             (&KeyedState::Quin(ref m), &KeyType::Quin(ref k)) => m.get(k),
             (&KeyedState::Sex(ref m), &KeyType::Sex(ref k)) => m.get(k),
+            _ => unreachable!(),
+        }
+    }
+
+    fn evict_bucket_inner<a>(hm: &mut HashMap::<a, Rows>, b: &HashSet<Bucket>) -> usize {
+      let mut ret = 0;
+      hm.extract_if(|_, rs| {
+        let mut hit = false;
+	let mut freed = 0;
+        rs.iter().for_each(|r| {
+          if b.contains(&r.1) {
+	    hit = true;
+	    // we are trying to see if we are the last holder of said row in the table.
+	    // however - this is unsafe! maybe the external program also have a reference to this row.
+	    // let's pray this does not happends.
+	    if Rc::strong_count(&r.0) == 1 {
+	      freed += r.deep_size_of();
+	    }
+	  }
+	});
+	if hit {
+	  ret += freed;
+	}
+	hit
+      }).for_each(|_| ());
+      ret.try_into().unwrap()
+    }
+
+    pub fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> usize {
+        match self {
+            KeyedState::Single(ref mut m) => KeyedState::evict_bucket_inner(m, b),
+            KeyedState::Double(ref mut m) => KeyedState::evict_bucket_inner(m, b),
+            KeyedState::Tri(ref mut m) => KeyedState::evict_bucket_inner(m, b),
+            KeyedState::Quad(ref mut m) => KeyedState::evict_bucket_inner(m, b),
+            KeyedState::Quin(ref mut m) => KeyedState::evict_bucket_inner(m, b),
+            KeyedState::Sex(ref mut m) => KeyedState::evict_bucket_inner(m, b),
             _ => unreachable!(),
         }
     }

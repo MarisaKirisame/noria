@@ -7,6 +7,7 @@ use crate::state::Bucket;
 use crate::prelude::*;
 use crate::state::{RecordResult, State};
 use common::SizeOf;
+use crate::state::HashSet;
 
 // Incremented on each PersistentState initialization so that IndexSeq
 // can be used to create unique identifiers for rows.
@@ -206,6 +207,10 @@ impl State for PersistentState {
     }
 
     fn evict_random_keys(&mut self, _: usize) -> (&[usize], Vec<Vec<DataType>>, u64) {
+        unreachable!("can't evict keys from PersistentState")
+    }
+
+    fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> usize {
         unreachable!("can't evict keys from PersistentState")
     }
 

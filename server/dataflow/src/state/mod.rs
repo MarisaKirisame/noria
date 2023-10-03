@@ -16,6 +16,7 @@ use ahash::RandomState;
 use common::SizeOf;
 use hashbag::HashBag;
 use std::hash::Hasher;
+use std::collections::HashSet;
 
 use crate::bucket::*;
 pub(crate) use self::memory_state::MemoryState;
@@ -57,6 +58,8 @@ pub(crate) trait State: SizeOf + Send {
     fn evict_keys(&mut self, tag: Tag, keys: &[Vec<DataType>]) -> Option<(&[usize], u64)>;
 
     fn clear(&mut self);
+
+    fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> usize;
 }
 
 #[derive(Clone, Debug)]

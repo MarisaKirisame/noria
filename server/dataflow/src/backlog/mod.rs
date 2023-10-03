@@ -241,23 +241,6 @@ impl WriteHandle {
     /// These will be made visible to readers after the next call to `swap()`.
     pub(crate) fn add(&mut self, rs: Records, zm: &mut ZombieManager, b: Bucket)
     {
-        // the below code cause perf regression. but the good news is readers only take a fraction of memory - so we can just ignore!
-    	if false && self.is_partial() {
-          (**rs).into_iter().for_each(|r|
-          match r {
-            Positive(v) => {
-	      zm.seen_add += v.len();
-            }
-            Negative(v) => { zm.seen_rm += v.len() }
-          });
-          zm.seen_materialize += 1;
-          zm.kh.push(0, &AffFunction::new(1, -(zm.created_time.elapsed().as_millis() as i64)));
-          if (zm.last_print.elapsed().as_secs() >= 10) {
-            zm.last_print = Instant::now();
-            println!("{:?}, {:?}, {:?}", zm.seen_add, zm.seen_rm, zm.seen_materialize);
-          }
-        }
-
         let mem_delta = self.handle.add(&self.key[..], self.cols, rs, zm, b);
         if mem_delta > 0 {
             self.mem_size += mem_delta as usize;

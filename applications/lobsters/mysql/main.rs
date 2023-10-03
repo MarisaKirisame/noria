@@ -248,8 +248,8 @@ impl Service<TrawlerRequest> for MysqlTrawler {
                         .await
                     }
                 }
-            }};
-        };
+            }}
+        }
 
         let variant = self.variant;
         Box::pin(async move {

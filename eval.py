@@ -12,7 +12,7 @@ def cleanup():
 
 # does not call cleanup - have to call it yourself.
 def run(mb):
-    subprocess.Popen(f"RUST_BACKTRACE=1 {profile_header}./target/release/noria-server --deployment x --memory {mb * 1024 * 1024} --durability memory", shell=True)
+    subprocess.Popen(f"RUST_BACKTRACE=1 USE_ZOMBIE=1 {profile_header}./target/release/noria-server --deployment x --memory {mb * 1024 * 1024} --durability memory", shell=True)
     #subprocess.Popen(f"./target/release/noria-server --deployment x --durability memory", shell=True)
     result = subprocess.run("./target/release/lobsters-noria --deployment x --scale 10 --prime --warmup 300 --runtime 300", shell=True, capture_output=True, text=True)
     print(result.stdout)
@@ -23,7 +23,9 @@ subprocess.run("cargo build --release --bin noria-server", shell=True, check=Tru
 subprocess.run("cargo build --release --bin lobsters-noria", shell=True, check=True)
     
 cleanup()
-run(10000)
+run(1000)
 cleanup()
+#run(10000)
+#cleanup()
 #run(256)
 #cleanup()
