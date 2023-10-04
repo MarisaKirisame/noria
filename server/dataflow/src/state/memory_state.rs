@@ -14,17 +14,17 @@ use std::convert::TryInto;
 pub struct MemoryState {
     state: Vec<SingleState>,
     by_tag: HashMap<Tag, usize>,
-    mem_size: u64,
+    mem_size: usize,
 }
 
 impl SizeOf for MemoryState {
-    fn size_of(&self) -> u64 {
+    fn size_of(&self) -> usize {
         use std::mem::size_of;
 
-        size_of::<Self>() as u64
+        size_of::<Self>() as usize
     }
 
-    fn deep_size_of_impl(&self) -> u64 {
+    fn deep_size_of_impl(&self) -> usize {
         self.mem_size
     }
 
@@ -156,7 +156,7 @@ impl State for MemoryState {
         self.state[0].values().flat_map(fix).collect()
     }
 
-    fn evict_random_keys(&mut self, count: usize) -> (&[usize], Vec<Vec<DataType>>, u64) {
+    fn evict_random_keys(&mut self, count: usize) -> (&[usize], Vec<Vec<DataType>>, usize) {
         let mut rng = rand::thread_rng();
         let index = rng.gen_range(0, self.state.len());
         let (bytes_freed, keys) = self.state[index].evict_random_keys(count, &mut rng);
@@ -174,7 +174,7 @@ impl State for MemoryState {
       ret
     }
     
-    fn evict_keys(&mut self, tag: Tag, keys: &[Vec<DataType>]) -> Option<(&[usize], u64)> {
+    fn evict_keys(&mut self, tag: Tag, keys: &[Vec<DataType>]) -> Option<(&[usize], usize)> {
         // we may be told to evict from a tag that add_key hasn't been called for yet
         // this can happen if an upstream domain issues an eviction for a replay path that we have
         // been told about, but that has not yet been finalized.

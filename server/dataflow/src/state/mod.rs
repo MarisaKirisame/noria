@@ -51,11 +51,11 @@ pub(crate) trait State: SizeOf + Send {
 
     /// Evict `count` randomly selected keys, returning key colunms of the index chosen to evict
     /// from along with the keys evicted and the number of bytes evicted.
-    fn evict_random_keys(&mut self, count: usize) -> (&[usize], Vec<Vec<DataType>>, u64);
+    fn evict_random_keys(&mut self, count: usize) -> (&[usize], Vec<Vec<DataType>>, usize);
 
     /// Evict the listed keys from the materialization targeted by `tag`, returning the key columns
     /// of the index that was evicted from and the number of bytes evicted.
-    fn evict_keys(&mut self, tag: Tag, keys: &[Vec<DataType>]) -> Option<(&[usize], u64)>;
+    fn evict_keys(&mut self, tag: Tag, keys: &[Vec<DataType>]) -> Option<(&[usize], usize)>;
 
     fn clear(&mut self);
 
@@ -104,10 +104,10 @@ impl Deref for Row {
     }
 }
 impl SizeOf for Row {
-    fn size_of(&self) -> u64 {
-        size_of::<Self>() as u64
+    fn size_of(&self) -> usize {
+        size_of::<Self>() as usize
     }
-    fn deep_size_of_impl(&self) -> u64 {
+    fn deep_size_of_impl(&self) -> usize {
         (*(self.0)).deep_size_of()
     }
     fn is_empty(&self) -> bool {

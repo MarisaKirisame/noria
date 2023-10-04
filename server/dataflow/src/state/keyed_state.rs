@@ -71,7 +71,7 @@ impl KeyedState {
 
     /// Remove all rows for a randomly chosen key seeded by `seed`, returning that key along with
     /// the number of bytes freed. Returns `None` if map is empty.
-    pub(super) fn evict_with_seed(&mut self, seed: usize) -> Option<(u64, Vec<DataType>)> {
+    pub(super) fn evict_with_seed(&mut self, seed: usize) -> Option<(usize, Vec<DataType>)> {
         let (rs, key) = match *self {
             KeyedState::Single(ref mut m) if !m.is_empty() => {
                 let index = seed % m.len();
@@ -117,7 +117,7 @@ impl KeyedState {
     }
 
     /// Remove all rows for the given key, returning the number of bytes freed.
-    pub(super) fn evict(&mut self, key: &[DataType]) -> u64 {
+    pub(super) fn evict(&mut self, key: &[DataType]) -> usize {
         match *self {
             KeyedState::Single(ref mut m) => m.swap_remove(&(key[0])),
             KeyedState::Double(ref mut m) => {

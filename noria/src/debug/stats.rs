@@ -35,7 +35,7 @@ pub struct NodeStats {
     /// Total thread time elapsed while processing in this node.
     pub process_ptime: u64,
     /// Total memory size of this node's state.
-    pub mem_size: u64,
+    pub mem_size: usize,
     /// The materialization type of this node's state.
     pub materialized: MaterializationStatus,
     /// The value returned from Ingredient::probe.

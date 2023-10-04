@@ -186,7 +186,7 @@ impl SingleState {
         assert!(replaced.is_none());
     }
 
-    pub(super) fn mark_hole(&mut self, key: &[DataType]) -> u64 {
+    pub(super) fn mark_hole(&mut self, key: &[DataType]) -> usize {
         let removed = match self.state {
             KeyedState::Single(ref mut m) => m.swap_remove(&(key[0])),
             KeyedState::Double(ref mut m) => {
@@ -232,7 +232,7 @@ impl SingleState {
         &mut self,
         count: usize,
         rng: &mut ThreadRng,
-    ) -> (u64, Vec<Vec<DataType>>) {
+    ) -> (usize, Vec<Vec<DataType>>) {
         let mut bytes_freed = 0;
         let mut keys = Vec::with_capacity(count);
         for _ in 0..count {
@@ -247,7 +247,7 @@ impl SingleState {
     }
 
     /// Evicts a specified key from this state, returning the number of bytes freed.
-    pub(super) fn evict_keys(&mut self, keys: &[Vec<DataType>]) -> u64 {
+    pub(super) fn evict_keys(&mut self, keys: &[Vec<DataType>]) -> usize {
         keys.iter().map(|k| self.state.evict(k)).sum()
     }
 

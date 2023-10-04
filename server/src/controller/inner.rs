@@ -892,7 +892,7 @@ impl ControllerInner {
             .collect()
     }
 
-    fn flush_partial(&mut self) -> u64 {
+    fn flush_partial(&mut self) -> usize {
         // get statistics for current domain sizes
         // and evict all state from partial nodes
         let workers = &self.workers;
@@ -903,7 +903,7 @@ impl ControllerInner {
             .map(|(di, s)| {
                 s.send_to_healthy(Box::new(Packet::GetStatistics), workers)
                     .unwrap();
-                let to_evict: Vec<(NodeIndex, u64)> =
+                let to_evict: Vec<(NodeIndex, usize)> =
                     futures_executor::block_on(replies.wait_for_statistics(&s))
                         .into_iter()
                         .flat_map(move |(_, node_stats)| {

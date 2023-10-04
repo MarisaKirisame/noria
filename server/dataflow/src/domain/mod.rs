@@ -2830,7 +2830,39 @@ impl Domain {
       }
     }
 
-    pub fn evict_mk(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
+    pub fn evict_mk(&mut self, num_bytes: usize, ex: &mut dyn Executor) {
+      // turned out that reader do consume significant amounts of memory,
+      // but zombie does not handle reader yet.
+      // to fix this, we spread the eviction budget proportionally across partial readers and zombies.
+      let prs = self.get_partial_reader_sizes();
+      let to_readers: usize = (prs * num_bytes) / self.get_state_sizes(true);
+
+      let mut to_free = Vec::new();
+      for nd in self.nodes.values() {
+        let n = &*nd.borrow();
+        let local_index = n.local_addr();
+
+        if n.is_reader() {
+          n.with_reader(|r| {
+            if r.is_partial() {
+	      to_free.push((local_index, (to_readers * r.state_size().unwrap()) / prs));
+            }
+          })
+          .unwrap();
+        }
+      }
+
+      for (idx, freeing) in to_free {
+        self.free_node(idx, freeing, ex);
+      }
+      
+      assert!(num_bytes >= to_readers.try_into().unwrap());
+      let to_zombie = num_bytes - to_readers;
+      self.evict_mk_zombie(to_zombie, ex);
+    }
+
+    // todo: trigger downstream eviction and update state sizes
+    pub fn evict_mk_zombie(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
       let t = self.zm.get_time().try_into().unwrap();
       self.zm.kh.advance_to(t);
       let mut freed_bytes = 0;
@@ -2846,9 +2878,9 @@ impl Domain {
     }
 
     pub fn free_node(&mut self, node: LocalNodeIndex, num_bytes: usize, ex: &mut dyn Executor) {
-        let mut freed = 0u64;
+        let mut freed: usize = 0;
         let mut n = self.nodes[node].borrow_mut();
-        while freed < num_bytes as u64 {
+        while freed < num_bytes {
             // TODO: use (num_bytes - freed) / SOMETHING to compute # keys to evict
             if n.is_dropped() {
                 break; // Node was dropped. Give up.
@@ -2895,6 +2927,7 @@ impl Domain {
         debug!(self.log, "evicted {} from node {:?}", freed, n);
         self.state_size.fetch_sub(freed as usize, Ordering::AcqRel);
     }
+
     pub fn handle_eviction(&mut self, m: Box<Packet>, ex: &mut dyn Executor) {
         match (*m,) {
             (Packet::Evict {
@@ -2973,7 +3006,32 @@ impl Domain {
             .unwrap();
     }
 
-    pub fn get_state_sizes(&self, partial_only: bool) -> u64 {
+    // todo: refactor
+    pub fn get_partial_reader_sizes(&self) -> usize {
+        self.nodes
+            .values()
+            .map(|nd| {
+                let n = &*nd.borrow();
+                let local_index = n.local_addr();
+
+                if n.is_reader() {
+                    // We are a reader, which has its own kind of state
+                    let mut size = 0;
+                    n.with_reader(|r| {
+                        if r.is_partial() {
+                            size = r.state_size().unwrap_or(0)
+                        }
+                    })
+                    .unwrap();
+                    size
+                } else {
+		  0
+		}
+            })
+            .sum()
+    }
+
+    pub fn get_state_sizes(&self, partial_only: bool) -> usize {
         self.nodes
             .values()
             .map(|nd| {

@@ -87,14 +87,14 @@ impl Reader {
         self.writer.as_ref().map(|w| w.is_empty()).unwrap_or(true)
     }
 
-    pub(crate) fn state_size(&self) -> Option<u64> {
+    pub(crate) fn state_size(&self) -> Option<usize> {
         self.writer.as_ref().map(SizeOf::deep_size_of)
     }
 
     /// Evict a randomly selected key, returning the number of bytes evicted.
     /// Note that due to how `evmap` applies the evictions asynchronously, we can only evict a
     /// single key at a time here.
-    pub(crate) fn evict_random_keys(&mut self, n: usize) -> u64 {
+    pub(crate) fn evict_random_keys(&mut self, n: usize) -> usize {
         let mut bytes_freed = 0;
         if let Some(ref mut handle) = self.writer {
             let mut rng = rand::thread_rng();

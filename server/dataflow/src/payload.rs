@@ -363,7 +363,7 @@ impl fmt::Debug for Packet {
 pub enum ControlReplyPacket {
     Ack(()),
     /// (number of rows, size in bytes)
-    StateSize(usize, u64),
+    StateSize(usize, usize),
     Statistics(
         noria::debug::stats::DomainStats,
         HashMap<petgraph::graph::NodeIndex, noria::debug::stats::NodeStats>,

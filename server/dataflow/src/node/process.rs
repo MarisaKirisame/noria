@@ -371,7 +371,7 @@ pub(crate) fn materialize(
     // yes!
     let s = state.unwrap();
     if ZombieManager::use_zombie() && s.is_partial() && time_taken.is_some() {
-      let mut mem_usage = 0u64;
+      let mut mem_usage = 0;
       (**rs).iter().for_each(|r|
         match r {
 	  Positive(v) => {

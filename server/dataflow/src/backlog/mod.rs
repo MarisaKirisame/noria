@@ -264,7 +264,7 @@ impl WriteHandle {
 
     /// Evict `count` randomly selected keys from state and return them along with the number of
     /// bytes that will be freed once the underlying `evmap` applies the operation.
-    pub(crate) fn evict_random_keys(&mut self, rng: &mut ThreadRng, mut n: usize) -> u64 {
+    pub(crate) fn evict_random_keys(&mut self, rng: &mut ThreadRng, mut n: usize) -> usize {
         let mut bytes_to_be_freed = 0;
         if self.mem_size > 0 {
             if self.handle.is_empty() {
@@ -272,7 +272,7 @@ impl WriteHandle {
             }
 
             self.handle.empty_random_for_each(rng, n, |vs| {
-                let size: u64 = vs.iter().map(|r| r.deep_size_of() as u64).sum();
+                let size: usize = vs.iter().map(|r| r.deep_size_of() as usize).sum();
                 bytes_to_be_freed += size;
                 n -= 1;
             });
@@ -287,14 +287,14 @@ impl WriteHandle {
 }
 
 impl SizeOf for WriteHandle {
-    fn size_of(&self) -> u64 {
+    fn size_of(&self) -> usize {
         use std::mem::size_of;
 
-        size_of::<Self>() as u64
+        size_of::<Self>() as usize
     }
 
-    fn deep_size_of_impl(&self) -> u64 {
-        self.mem_size as u64
+    fn deep_size_of_impl(&self) -> usize {
+        self.mem_size as usize
     }
 
     fn is_empty(&self) -> bool {

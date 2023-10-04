@@ -11,33 +11,33 @@ pub use self::records::*;
 pub use noria::DataType;
 
 pub trait SizeOf {
-    fn deep_size_of(&self) -> u64 {
+    fn deep_size_of(&self) -> usize {
         let ret = self.deep_size_of_impl();
 	// println!("calling deep_size_of on {} with value of {}", std::any::type_name::<Self>(), ret);
 	ret
     }
-    fn deep_size_of_impl(&self) -> u64;
-    fn size_of(&self) -> u64;
+    fn deep_size_of_impl(&self) -> usize;
+    fn size_of(&self) -> usize;
     fn is_empty(&self) -> bool;
 }
 
 impl SizeOf for DataType {
-    fn deep_size_of_impl(&self) -> u64 {
+    fn deep_size_of_impl(&self) -> usize {
         use std::mem::size_of_val;
 
         let inner = match *self {
-            DataType::Text(ref t) => size_of_val(t) as u64 + t.to_bytes().len() as u64,
-            _ => 0u64,
+            DataType::Text(ref t) => size_of_val(t) + t.to_bytes().len(),
+            _ => 0,
         };
 
         self.size_of() + inner
     }
 
-    fn size_of(&self) -> u64 {
+    fn size_of(&self) -> usize {
         use std::mem::size_of;
 
         // doesn't include data if stored externally
-        size_of::<DataType>() as u64
+        size_of::<DataType>()
     }
 
     fn is_empty(&self) -> bool {
@@ -46,16 +46,16 @@ impl SizeOf for DataType {
 }
 
 impl SizeOf for Vec<DataType> {
-    fn deep_size_of_impl(&self) -> u64 {
+    fn deep_size_of_impl(&self) -> usize {
         use std::mem::size_of_val;
 
-        size_of_val(self) as u64 + self.iter().fold(0u64, |acc, d| acc + d.deep_size_of())
+        size_of_val(self) + self.iter().fold(0, |acc, d| acc + d.deep_size_of())
     }
 
-    fn size_of(&self) -> u64 {
+    fn size_of(&self) -> usize {
         use std::mem::{size_of, size_of_val};
 
-        size_of_val(self) as u64 + size_of::<DataType>() as u64 * self.len() as u64
+        size_of_val(self) + size_of::<DataType>() * self.len()
     }
 
     fn is_empty(&self) -> bool {

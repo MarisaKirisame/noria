@@ -8,13 +8,14 @@ use crate::prelude::*;
 use crate::state::{RecordResult, State};
 use common::SizeOf;
 use crate::state::HashSet;
+use std::convert::TryInto;
 
 // Incremented on each PersistentState initialization so that IndexSeq
 // can be used to create unique identifiers for rows.
-type IndexEpoch = u64;
+type IndexEpoch = usize;
 
 // Monotonically increasing sequence number since last IndexEpoch used to uniquely identify a row.
-type IndexSeq = u64;
+type IndexSeq = usize;
 
 // RocksDB key used for storing meta information (like indices).
 const META_KEY: &[u8] = b"meta";
@@ -206,7 +207,7 @@ impl State for PersistentState {
         unreachable!("PersistentState can't be partial")
     }
 
-    fn evict_random_keys(&mut self, _: usize) -> (&[usize], Vec<Vec<DataType>>, u64) {
+    fn evict_random_keys(&mut self, _: usize) -> (&[usize], Vec<Vec<DataType>>, usize) {
         unreachable!("can't evict keys from PersistentState")
     }
 
@@ -214,7 +215,7 @@ impl State for PersistentState {
         unreachable!("can't evict keys from PersistentState")
     }
 
-    fn evict_keys(&mut self, _: Tag, _: &[Vec<DataType>]) -> Option<(&[usize], u64)> {
+    fn evict_keys(&mut self, _: Tag, _: &[Vec<DataType>]) -> Option<(&[usize], usize)> {
         unreachable!("can't evict keys from PersistentState")
     }
 
@@ -580,9 +581,9 @@ fn prefix_transform<'a>(key: &'a [u8]) -> &'a [u8] {
         return key;
     }
 
-    // We encoded the size of the key itself with a u64, which bincode uses 8 bytes to encode:
+    // We encoded the size of the key itself with a usize, which bincode uses 8 bytes to encode:
     let size_offset = 8;
-    let key_size: u64 = bincode::deserialize(&key[..size_offset]).unwrap();
+    let key_size: usize = bincode::deserialize(&key[..size_offset]).unwrap();
     let prefix_len = size_offset + key_size as usize;
     // Strip away the key suffix if we haven't already done so:
     &key[..prefix_len]
@@ -594,17 +595,19 @@ fn in_domain(key: &[u8]) -> bool {
 }
 
 impl SizeOf for PersistentState {
-    fn size_of(&self) -> u64 {
+    fn size_of(&self) -> usize {
         use std::mem::size_of;
 
-        size_of::<Self>() as u64
+        size_of::<Self>() as usize
     }
 
-    fn deep_size_of_impl(&self) -> u64 {
+    fn deep_size_of_impl(&self) -> usize {
         let db = self.db.as_ref().unwrap();
         db.property_int_value("rocksdb.estimate-live-data-size")
             .unwrap()
             .unwrap()
+	    .try_into()
+	    .unwrap()
     }
 
     fn is_empty(&self) -> bool {
@@ -1156,7 +1159,7 @@ mod tests {
         let r = KeyType::Double(data.clone());
         let k = PersistentState::serialize_prefix(&r);
         let prefix = prefix_transform(&k);
-        let size: u64 = bincode::deserialize(&prefix).unwrap();
+        let size: usize = bincode::deserialize(&prefix).unwrap();
         assert_eq!(size, bincode::serialized_size(&data).unwrap());
 
         // prefix_extractor requirements:
