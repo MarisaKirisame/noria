@@ -59,7 +59,7 @@ pub(crate) trait State: SizeOf + Send {
 
     fn clear(&mut self);
 
-    fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> usize;
+    fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> (Vec<(&[usize], Vec<Vec<DataType>>)>, usize);
 }
 
 #[derive(Clone, Debug)]
