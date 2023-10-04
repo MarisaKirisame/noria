@@ -211,7 +211,7 @@ impl State for PersistentState {
         unreachable!("can't evict keys from PersistentState")
     }
 
-    fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> usize {
+    fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> (Vec<(&[usize], Vec<Vec<DataType>>)>, usize) {
         unreachable!("can't evict keys from PersistentState")
     }
 

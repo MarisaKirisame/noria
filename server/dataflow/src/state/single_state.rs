@@ -49,11 +49,6 @@ impl SingleState {
         }
     }
 
-    pub fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> usize {
-        assert!(self.partial);
-        self.state.evict_bucket(b)
-    }
-
     /// Inserts the given record, or returns false if a hole was encountered (and the record hence
     /// not inserted).
     pub(super) fn insert_row(&mut self, r: Row) -> bool {
@@ -226,13 +221,18 @@ impl SingleState {
         };
     }
 
+    pub fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> (Vec<Vec<DataType>>, usize) {
+        assert!(self.partial);
+        self.state.evict_bucket(b)
+    }
+
     /// Evict `count` randomly selected keys from state and return them along with the number of
     /// bytes freed.
     pub(super) fn evict_random_keys(
         &mut self,
         count: usize,
         rng: &mut ThreadRng,
-    ) -> (usize, Vec<Vec<DataType>>) {
+    ) -> (Vec<Vec<DataType>>, usize) {
         let mut bytes_freed = 0;
         let mut keys = Vec::with_capacity(count);
         for _ in 0..count {
@@ -243,7 +243,7 @@ impl SingleState {
                 break;
             }
         }
-        (bytes_freed, keys)
+        (keys, bytes_freed)
     }
 
     /// Evicts a specified key from this state, returning the number of bytes freed.

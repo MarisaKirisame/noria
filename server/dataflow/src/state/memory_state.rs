@@ -159,19 +159,22 @@ impl State for MemoryState {
     fn evict_random_keys(&mut self, count: usize) -> (&[usize], Vec<Vec<DataType>>, usize) {
         let mut rng = rand::thread_rng();
         let index = rng.gen_range(0, self.state.len());
-        let (bytes_freed, keys) = self.state[index].evict_random_keys(count, &mut rng);
+        let (keys, bytes_freed) = self.state[index].evict_random_keys(count, &mut rng);
         self.mem_size = self.mem_size.saturating_sub(bytes_freed);
         (self.state[index].key(), keys, bytes_freed)
     }
 
-    fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> usize {
+    fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> (Vec<(&[usize], Vec<Vec<DataType>>)>, usize) {
+      let mut vec = Vec::new();
       let mut ret = 0;
       for s in &mut self.state {
-        ret += s.evict_bucket(b);
+        let (keys, byte_freed) = s.evict_bucket(b);
+	vec.push((s.key(), keys));
+        ret += byte_freed;
       }
       // should it be saturating_sub?
       self.mem_size = self.mem_size.saturating_sub(ret.try_into().unwrap());
-      ret
+      (vec, ret)
     }
     
     fn evict_keys(&mut self, tag: Tag, keys: &[Vec<DataType>]) -> Option<(&[usize], usize)> {

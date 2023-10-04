@@ -2810,8 +2810,7 @@ impl Domain {
 	}
     }
 
-    pub fn buffer_evict(&mut self, khe: KHEntry) -> usize {
-      let mut sb = &mut self.zm.buffer;
+    pub fn buffer_evict(sb: &mut EvictBuffer, khe: &KHEntry, ex: &mut dyn Executor) -> (Vec<(&[usize], Vec<Vec<DataType>>)>, usize) {
       if !sb.map.contains_key(&khe.idx) {
         sb.map.insert(khe.idx, EvictEntry {b: HashSet::new(), mem:0});
       }
@@ -2826,7 +2825,7 @@ impl Domain {
 	sb.map.remove(&khe.idx);
 	ret
       } else {
-        0
+        (vec![], 0)
       }
     }
 
@@ -2865,16 +2864,33 @@ impl Domain {
     pub fn evict_mk_zombie(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
       let t = self.zm.get_time().try_into().unwrap();
       self.zm.kh.advance_to(t);
-      let mut freed_bytes = 0;
+      let mut total_freed_bytes = 0;
       self.report_state_sizes();
-      while freed_bytes < num_bytes && (!self.zm.kh.is_empty()) {
+      while total_freed_bytes < num_bytes && (!self.zm.kh.is_empty()) {
         let len = self.zm.kh.len();
 	if len % 10000 == 0 {
           println!("{}", len);
 	}
 	let entry = self.zm.kh.pop();
-	freed_bytes += self.buffer_evict(entry);
+	let (x, freed_bytes) = Self::buffer_evict(&mut self.zm.buffer, &entry, ex);
+	for (key_columns, keys) in x {
+          if !keys.is_empty() {
+            Self::trigger_downstream_evictions(
+              &self.log,
+              &key_columns[..],
+              &keys[..],
+              entry.idx,
+              ex,
+              &self.not_ready,
+              &self.replay_paths,
+              self.shard,
+              &mut self.state,
+              &self.nodes,);
+          }
+	}
+	total_freed_bytes += freed_bytes;
       }
+      self.state_size.fetch_sub(total_freed_bytes, Ordering::AcqRel);
     }
 
     pub fn free_node(&mut self, node: LocalNodeIndex, num_bytes: usize, ex: &mut dyn Executor) {

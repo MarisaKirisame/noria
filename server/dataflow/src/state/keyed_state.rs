@@ -33,8 +33,10 @@ impl KeyedState {
         }
     }
 
-    fn evict_bucket_inner<a>(hm: &mut HashMap::<a, Rows>, b: &HashSet<Bucket>) -> usize {
-      let mut ret = 0;
+    fn evict_bucket_inner<A, B, F>(hm: &mut HashMap::<A, Rows>, b: &HashSet<Bucket>, f: F) -> (Vec<B>, usize)
+      where F: Fn(A) -> B {
+      let mut total_freed = 0;
+      let mut vec = Vec::new();
       hm.extract_if(|_, rs| {
         let mut hit = false;
 	let mut freed = 0;
@@ -50,21 +52,21 @@ impl KeyedState {
 	  }
 	});
 	if hit {
-	  ret += freed;
+	  total_freed += freed;
 	}
 	hit
-      }).for_each(|_| ());
-      ret.try_into().unwrap()
+      }).for_each(|(k, v)| vec.push(f(k)));
+      (vec, total_freed) 
     }
 
-    pub fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> usize {
+    pub fn evict_bucket(&mut self, b: &HashSet<Bucket>) -> (Vec<Vec<DataType>>, usize) {
         match self {
-            KeyedState::Single(ref mut m) => KeyedState::evict_bucket_inner(m, b),
-            KeyedState::Double(ref mut m) => KeyedState::evict_bucket_inner(m, b),
-            KeyedState::Tri(ref mut m) => KeyedState::evict_bucket_inner(m, b),
-            KeyedState::Quad(ref mut m) => KeyedState::evict_bucket_inner(m, b),
-            KeyedState::Quin(ref mut m) => KeyedState::evict_bucket_inner(m, b),
-            KeyedState::Sex(ref mut m) => KeyedState::evict_bucket_inner(m, b),
+            KeyedState::Single(ref mut m) => KeyedState::evict_bucket_inner(m, b, |k| vec![k]),
+            KeyedState::Double(ref mut m) => KeyedState::evict_bucket_inner(m, b, |k| vec![k.0, k.1]),
+            KeyedState::Tri(ref mut m) => KeyedState::evict_bucket_inner(m, b, |k| vec![k.0, k.1, k.2]),
+            KeyedState::Quad(ref mut m) => KeyedState::evict_bucket_inner(m, b, |k| vec![k.0, k.1, k.2, k.3]),
+            KeyedState::Quin(ref mut m) => KeyedState::evict_bucket_inner(m, b, |k| vec![k.0, k.1, k.2, k.3, k.4]),
+            KeyedState::Sex(ref mut m) => KeyedState::evict_bucket_inner(m, b, |k| vec![k.0, k.1, k.2, k.3, k.4, k.5]),
             _ => unreachable!(),
         }
     }
