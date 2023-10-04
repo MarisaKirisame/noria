@@ -2810,7 +2810,8 @@ impl Domain {
 	}
     }
 
-    pub fn buffer_evict(sb: &mut EvictBuffer, khe: &KHEntry, ex: &mut dyn Executor) -> (Vec<(&[usize], Vec<Vec<DataType>>)>, usize) {
+    pub fn buffer_evict(&mut self, khe: &KHEntry, ex: &mut dyn Executor) -> (Vec<(&[usize], Vec<Vec<DataType>>)>, usize) {
+      let sb = &mut self.zm.buffer;
       if !sb.map.contains_key(&khe.idx) {
         sb.map.insert(khe.idx, EvictEntry {b: HashSet::new(), mem:0});
       }
@@ -2872,8 +2873,10 @@ impl Domain {
           println!("{}", len);
 	}
 	let entry = self.zm.kh.pop();
-	let (x, freed_bytes) = Self::buffer_evict(&mut self.zm.buffer, &entry, ex);
-	for (key_columns, keys) in x {
+	let (x, freed_bytes) = self.buffer_evict(&entry, ex);
+	// todo: I hate this clone(). anyway to remove it?
+	let y: Vec<(Vec<usize>, Vec<_>)> = x.into_iter().map(|(key_columns_, keys_)| (key_columns_.to_vec(), keys_)).collect();
+	for (key_columns, keys) in y {
           if !keys.is_empty() {
             Self::trigger_downstream_evictions(
               &self.log,
