@@ -33,3 +33,6 @@ plots_files/
 .Rhistory
 
 *.swp
+*~
+log/
+__pycache__/
