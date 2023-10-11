@@ -1,6 +1,21 @@
 import subprocess
+import argparse
 
-raise
+parser = argparse.ArgumentParser("single eval")
+parser.add_argument("--config", required=True)
+parser.add_argument("--log_dir", required=True)
+args = parser.parse_args()
+
+config = eval(args.config)
+
+memory = config["memory"]
+scale = config["scale"]
+use_zombie = config["use_zombie"]
+
+log_dir = args.log_dir
+
+with open(f"{log_dir}/config", 'w') as f:
+    f.write(str(config))
 
 PROFILE = False
 
@@ -12,9 +27,9 @@ def cleanup():
 
 # does not call cleanup - have to call it yourself.
 def run(mb):
-    subprocess.Popen(f"RUST_BACKTRACE=1 USE_ZOMBIE=1 {profile_header}./target/release/noria-server --deployment x --memory {mb * 1024 * 1024} --durability memory", shell=True)
+    subprocess.Popen(f"RUST_BACKTRACE=1 USE_ZOMBIE={use_zombie} {profile_header}./target/release/noria-server --deployment x --memory {mb * 1024 * 1024} --durability memory", shell=True)
     #subprocess.Popen(f"./target/release/noria-server --deployment x --durability memory", shell=True)
-    result = subprocess.run("timeout 20m ./target/release/lobsters-noria --deployment x --scale 10 --prime --warmup 300 --runtime 300", shell=True, capture_output=True, text=True)
+    result = subprocess.run(f"timeout 5m ./target/release/lobsters-noria --deployment x --scale {scale} --prime --warmup 60 --runtime 60", shell=True, capture_output=True, text=True)
     print("printing result...")
     print(result.stdout)
     print("printing result err...")
@@ -24,19 +39,13 @@ def run(mb):
         print(x)
         result_pattern = "# generated ops/s:"
         if x.startswith(result_pattern):
-            cleanup()
-            print(float(x[len(result_pattern):]))
-            raise 
+            with open(f"{log_dir}/throughput", 'w') as f:
+                f.write(str(float(x[len(result_pattern):])))
 
 cleanup()
 subprocess.run("cargo update", shell=True, check=True)
 subprocess.run("cargo build --release --bin noria-server", shell=True, check=True)
 subprocess.run("cargo build --release --bin lobsters-noria", shell=True, check=True)
 
-
-run(1000)
+run(memory)
 cleanup()
-#run(10000)
-#cleanup()
-#run(256)
-#cleanup()
