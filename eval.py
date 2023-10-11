@@ -5,7 +5,7 @@ import time
 import os
 import shutil
 
-shutil.rmtree("log")
+shutil.rmtree("log", ignore_errors=True)
 
 CONFIG = {"memory": NONDET(40, 60, 80, 100, 120), "scale": 1, "use_zombie": NONDET(0, 1)}
 CONFIG = {"memory": NONDET(30, 40, 50, 60, 70, 80, 90, 100, 110, 120), "scale": 1, "use_zombie": NONDET(0, 1)} # trying a bigger run

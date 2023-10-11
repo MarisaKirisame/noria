@@ -3,6 +3,7 @@ from matplotlib import pyplot as plt
 import subprocess
 import dominate
 from dominate.tags import *
+import re
 
 class Counter:
     def __init__(self):
@@ -24,11 +25,21 @@ def normal_throughput(t):
 experiment = []
 
 class Experiment:
-    def __init__(self, config, throughput, log_dir):
-        self.config = config
-        self.throughput = throughput
+    def __init__(self, log_dir):
         self.log_dir = log_dir
+        with open(f"{self.log_dir}/config") as f:
+            self.config = eval(f.read())
+        with open(f"{self.log_dir}/throughput") as f:
+            self.throughput = float(f.read())
         self.is_normal = normal_throughput(self.throughput)
+        self.stdout_dir = f"{self.log_dir}/result.stdout"
+        self.stderr_dir = f"{self.log_dir}/result.stderr"
+        with open(self.stdout_dir) as f:
+            self.peak_memory = 0
+            for x in f.readlines():
+                if x.startswith("handle_eviction:"):
+                    memory = int(re.findall(r"handle_eviction: memory = (\d*), limit = .*", x)[0])
+                    self.peak_memory = max(memory, self.peak_memory)
 
     def __str__(self):
         return str((self.config, self.throughput, self.is_normal))
@@ -37,12 +48,7 @@ class Experiment:
         return repr((self.config, self.throughput, self.is_normal))
 
 for x in os.listdir("log"):
-    log_dir = f"log/{x}"
-    with open(f"{log_dir}/config") as f:
-        config = eval(f.read())
-    with open(f"{log_dir}/throughput") as f:
-        throughput = float(f.read())
-    experiment.append(Experiment(config, throughput, log_dir))
+    experiment.append(Experiment(f"log/{x}"))
 
 baseline_points = []
 zombie_points = []
@@ -56,10 +62,10 @@ run("mkdir output")
 for x in experiment:
     if x.config["use_zombie"] == 0:
         if x.is_normal:
-            baseline_points.append((x.config["memory"], x.throughput))
+            baseline_points.append((x.peak_memory, x.throughput))
     elif x.config["use_zombie"] == 1:
         if x.is_normal:
-            zombie_points.append((x.config["memory"], x.throughput))
+            zombie_points.append((x.peak_memory, x.throughput))
     else:
         raise
 
