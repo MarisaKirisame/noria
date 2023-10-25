@@ -27,7 +27,7 @@ def cleanup():
 
 # does not call cleanup - have to call it yourself.
 def run(mb):
-    subprocess.Popen(f"RUST_BACKTRACE=1 USE_ZOMBIE={use_zombie} {profile_header}./target/release/noria-server --deployment x --memory {mb * 1024 * 1024} --durability memory", shell=True)
+    subprocess.Popen(f"RUST_BACKTRACE=1 USE_ZOMBIE={use_zombie} ZOMBIE_LOG_DIR={log_dir} {profile_header}./target/release/noria-server --deployment x --memory {mb * 1024 * 1024} --durability memory", shell=True)
     #subprocess.Popen(f"./target/release/noria-server --deployment x --durability memory", shell=True)
     result = subprocess.run(f"timeout 5m ./target/release/lobsters-noria --deployment x --scale {scale} --prime --warmup 60 --runtime 60", shell=True, capture_output=True, text=True)
     print("printing result...")

@@ -8,6 +8,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time;
+use std::time::Instant;
 
 use crate::group_commit::GroupCommitQueueSet;
 use crate::payload::{ControlReplyPacket, ReplayPieceContext, SourceSelection};
@@ -764,6 +765,7 @@ impl Domain {
     fn handle(&mut self, m: Box<Packet>, executor: &mut dyn Executor, top: bool) {
         if self.wait_time.is_running() {
             self.wait_time.stop();
+	    self.zm.record_waiting(self.wait_time.num_milliseconds());
         }
 
         match *m {
@@ -774,9 +776,11 @@ impl Domain {
                 self.total_forward_time.stop();
             }
             Packet::ReplayPiece { .. } => {
+                let before = Instant::now();
                 self.total_replay_time.start();
                 self.handle_replay(m, executor);
                 self.total_replay_time.stop();
+		self.zm.record_recomputation(before.elapsed());
             }
             Packet::Evict { .. } | Packet::EvictKeys { .. } => {
                 self.handle_eviction(m, executor);
@@ -1105,6 +1109,7 @@ impl Domain {
                         cols,
                         node,
                     } => {
+                        let before = Instant::now();
                         self.total_replay_time.start();
                         // the reader could have raced with us filling in the key after some
                         // *other* reader requested it, so let's double check that it indeed still
@@ -1149,6 +1154,7 @@ impl Domain {
                             self.find_tags_and_replay(keys, &cols[..], node);
                         }
                         self.total_replay_time.stop();
+        		self.zm.record_recomputation(before.elapsed());
                     }
                     Packet::RequestPartialReplay {
                         tag,
@@ -1162,6 +1168,7 @@ impl Domain {
                            "tag" => tag,
                            "keys" => format!("{:?}", keys)
                         );
+			let before = Instant::now();
                         self.total_replay_time.start();
                         for key in keys {
                             self.seed_replay(
@@ -1173,12 +1180,14 @@ impl Domain {
                             );
                         }
                         self.total_replay_time.stop();
+			self.zm.record_recomputation(before.elapsed());
                     }
                     Packet::StartReplay { tag, from } => {
                         use std::thread;
                         assert_eq!(self.replay_paths[&tag].source, Some(from));
 
                         let start = time::Instant::now();
+			let before = Instant::now();
                         self.total_replay_time.start();
                         info!(self.log, "starting replay");
 
@@ -1304,13 +1313,15 @@ impl Domain {
                                 .unwrap();
                         }
                         self.handle_replay(p, executor);
-
                         self.total_replay_time.stop();
+			self.zm.record_recomputation(before.elapsed());
                     }
                     Packet::Finish(tag, ni) => {
+ 		        let before = Instant::now();
                         self.total_replay_time.start();
                         self.finish_replay(tag, ni, executor);
                         self.total_replay_time.stop();
+			self.zm.record_recomputation(before.elapsed());
                     }
                     Packet::Ready { node, purge, index } => {
                         assert_eq!(self.mode, DomainMode::Forwarding);
@@ -1483,6 +1494,7 @@ impl Domain {
                 }
 
                 if !self.buffered_replay_requests.is_empty() {
+                    let before = Instant::now();
                     self.total_replay_time.start();
                     let now = time::Instant::now();
                     let to = self.replay_batch_timeout;
@@ -1512,6 +1524,7 @@ impl Domain {
                         self.seed_all(tag, requesting_shard, keys, single_shard, executor);
                     }
                     self.total_replay_time.stop();
+		    self.zm.record_recomputation(before.elapsed());
                 }
 
                 let mut swap = HashSet::new();
@@ -2736,11 +2749,13 @@ impl Domain {
     }
 
     pub fn evict(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
+        let before = Instant::now();
         if !ZombieManager::use_zombie() {
 	    self.evict_baseline(num_bytes, ex);
 	} else {
             self.evict_mk(num_bytes, ex);
 	}
+	self.zm.record_eviction(before.elapsed());
     }
     
     pub fn evict_baseline(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
@@ -3115,6 +3130,7 @@ impl Domain {
     pub fn on_event(&mut self, executor: &mut dyn Executor, event: PollEvent) -> ProcessResult {
         if self.wait_time.is_running() {
             self.wait_time.stop();
+   	    self.zm.record_waiting(self.wait_time.num_milliseconds());
         }
         //self.total_time.start();
         //self.total_ptime.start();

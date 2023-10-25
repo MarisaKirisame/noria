@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use std::time;
+use std::time::*;
 use zombie_sys::*;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -7,6 +7,10 @@ use std::env;
 use zombie_sys::KineticHeap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use rand::Rng;
+use std::convert::TryInto;
+use std::io::Write;
+use serde_json::json;
 
 // a bucket is the smallest unit of memory management.
 // every process() shall create a new bucket.
@@ -37,16 +41,33 @@ impl EvictBuffer {
   }
 }
 
+pub fn duration_to_millis(d: Duration) -> u64 {
+  d.as_millis().try_into().unwrap()
+}
+
+pub fn sys_time() -> u64 {
+  match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+    Ok(n) => duration_to_millis(n),
+    Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+  }
+}
+
 pub struct ZombieManager {
   pub buffer: EvictBuffer, 
   pub kh: KineticHanger<KHEntry>,
   pub seen_add: usize,
   pub seen_rm: usize,
   pub seen_materialize: usize,
-  pub last_print: time::Instant,
-  pub created_time: time::Instant,
+  pub last_print: Instant,
+  pub created_time: Instant,
   pub fresh_bucket: usize,
   pub log: File,
+  pub last_log_evicting: Instant,
+  pub time_spent_evicting: Duration,
+  pub last_log_recomputing: Instant,
+  pub time_spent_recomputing: Duration,
+  pub total_time_spent_waiting_ms: u64,
+  pub last_log_waiting: Instant,
 }
 
 impl ZombieManager {
@@ -61,6 +82,13 @@ impl ZombieManager {
     }
   }
 
+  pub fn log_path() -> String {
+    let dir = env::var("ZOMBIE_LOG_DIR").unwrap();
+    let mut rng = rand::thread_rng();
+    let n1: u32 = rng.gen();
+    dir + "/" + &n1.to_string() + ".log"
+  }
+  
   pub fn get_time(&self) -> u128 {
     self.created_time.elapsed().as_millis()
   }
@@ -71,9 +99,6 @@ impl ZombieManager {
     Bucket(ret)
   }
 
-  pub fn process_records(&mut self, rs: &Records, b: Bucket) {
-  }
-
   pub fn new() -> ZombieManager {
     ZombieManager {
       buffer: EvictBuffer::new(),
@@ -81,13 +106,51 @@ impl ZombieManager {
       seen_add: 0,
       seen_rm: 0,
       seen_materialize: 0,
-      last_print: time::Instant::now(),
-      created_time: time::Instant::now(),
+      last_print: Instant::now(),
+      created_time: Instant::now(),
+      last_log_evicting: Instant::now(),
+      last_log_recomputing: Instant::now(),
+      last_log_waiting: Instant::now(),
       fresh_bucket: 0,
       log: OpenOptions::new().write(true)
-			     .create(true)
-                             .truncate(true)
-                             .open("zombie.log").unwrap(),
+			     .create_new(true)
+                             .open(Self::log_path()).unwrap(),
+      time_spent_evicting: Duration::ZERO,
+      time_spent_recomputing: Duration::ZERO,
+      total_time_spent_waiting_ms: 0,
+    }
+  }
+
+  pub fn write_json(&mut self, j: serde_json::Value) {
+    self.log.write_all(serde_json::to_string(&j).unwrap().as_bytes()).unwrap();
+    self.log.write_all(b"\n").unwrap();
+  }
+
+  pub fn record_eviction(&mut self, time: Duration) {
+    self.time_spent_evicting += time;
+    if (self.last_log_evicting.elapsed().as_secs() >= 1) {
+      self.write_json(json!({"command": "eviction", "current_time": sys_time(), "spent_time": duration_to_millis(self.time_spent_evicting)}));
+      self.last_log_evicting = Instant::now();
+      self.time_spent_evicting = Duration::ZERO;
+    }
+  }
+
+  pub fn record_recomputation(&mut self, time: Duration) {
+    self.time_spent_recomputing += time;
+    if (self.last_log_recomputing.elapsed().as_secs() >= 1) {
+      self.write_json(json!({"command": "recomputation", "current_time": sys_time(), "spent_time": duration_to_millis(self.time_spent_recomputing)}));
+      self.last_log_recomputing = Instant::now();
+      self.time_spent_recomputing = Duration::ZERO;
+    }
+  }
+
+  // note that record_eviction and record_recomputation pass in the current duration, while this pass in the total duration.
+  pub fn record_waiting(&mut self, total_time_ms: u64) {
+    if (self.last_log_waiting.elapsed().as_secs() >= 1) {
+      assert!(total_time_ms >= self.total_time_spent_waiting_ms);
+      self.write_json(json!({"command": "wait", "current_time": sys_time(), "spent_time": total_time_ms - self.total_time_spent_waiting_ms}));
+      self.last_log_waiting = Instant::now();
+      self.total_time_spent_waiting_ms = total_time_ms;
     }
   }
 }
