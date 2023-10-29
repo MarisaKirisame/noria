@@ -132,10 +132,10 @@ impl ZombieManager {
     self.log.write_all(b"\n").unwrap();
   }
 
-  pub fn record_eviction(&mut self, time: Duration) {
+  pub fn record_eviction(&mut self, time: Duration, c_value: i128) {
     self.time_spent_evicting += time;
     if (self.last_log_evicting.elapsed().as_secs() >= 1) {
-      self.write_json(json!({"command": "eviction", "current_time": sys_time(), "spent_time": duration_to_millis(self.time_spent_evicting)}));
+      self.write_json(json!({"command": "eviction", "current_time": sys_time(), "spent_time": duration_to_millis(self.time_spent_evicting), "c_value": c_value}));
       self.last_log_evicting = Instant::now();
       self.time_spent_evicting = Duration::ZERO;
     }

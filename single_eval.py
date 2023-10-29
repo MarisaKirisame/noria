@@ -43,9 +43,5 @@ def run(mb):
                 f.write(str(float(x[len(result_pattern):])))
 
 cleanup()
-subprocess.run("cargo update", shell=True, check=True)
-subprocess.run("cargo build --release --bin noria-server", shell=True, check=True)
-subprocess.run("cargo build --release --bin lobsters-noria", shell=True, check=True)
-
 run(memory)
 cleanup()

@@ -2752,12 +2752,14 @@ impl Domain {
 
     pub fn evict(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
         let before = Instant::now();
-        if !ZombieManager::use_zombie() {
-	    self.evict_baseline(num_bytes, ex)
-	} else {
-            self.evict_mk(num_bytes, ex)
-	}
-	self.zm.record_eviction(before.elapsed());
+	let c_value =
+	    if !ZombieManager::use_zombie() {
+	        self.evict_baseline(num_bytes, ex);
+  	        0
+	    } else {
+                self.evict_mk(num_bytes, ex)
+	    };
+	self.zm.record_eviction(before.elapsed(), c_value);
     }
     
     pub fn evict_baseline(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
@@ -2847,7 +2849,7 @@ impl Domain {
       }
     }
 
-    pub fn evict_mk(&mut self, num_bytes: usize, ex: &mut dyn Executor) {
+    pub fn evict_mk(&mut self, num_bytes: usize, ex: &mut dyn Executor) -> i128 {
       // turned out that reader do consume significant amounts of memory,
       // but zombie does not handle reader yet.
       // to fix this, we spread the eviction budget proportionally across partial readers and zombies.
@@ -2875,7 +2877,7 @@ impl Domain {
       
       assert!(num_bytes >= to_readers.try_into().unwrap());
       let to_zombie = num_bytes - to_readers;
-      self.evict_mk_zombie(to_zombie, ex);
+      self.evict_mk_zombie(to_zombie, ex)
     }
 
     // todo: trigger downstream eviction and update state sizes
