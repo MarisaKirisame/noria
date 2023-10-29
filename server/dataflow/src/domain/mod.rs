@@ -609,6 +609,7 @@ impl Domain {
             assert_eq!(captured.len(), 0);
             self.process_ptimes.stop();
             self.process_times.stop();
+	    self.zm.record_process(captured.len(), misses.len());
 
             if m.is_none() {
                 // no need to deal with our children if we're not sending them anything
@@ -2034,6 +2035,7 @@ impl Domain {
                                 .then_with(|| a.replay_key().unwrap().cmp(b.replay_key().unwrap()))
                         });
                         misses.dedup();
+                        self.zm.record_process(captured.len(), misses.len());
 
                         let missed_on = if backfill_keys.is_some() {
                             let mut missed_on = HashSet::with_capacity(misses.len());
@@ -2751,9 +2753,9 @@ impl Domain {
     pub fn evict(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
         let before = Instant::now();
         if !ZombieManager::use_zombie() {
-	    self.evict_baseline(num_bytes, ex);
+	    self.evict_baseline(num_bytes, ex)
 	} else {
-            self.evict_mk(num_bytes, ex);
+            self.evict_mk(num_bytes, ex)
 	}
 	self.zm.record_eviction(before.elapsed());
     }
@@ -2877,19 +2879,20 @@ impl Domain {
     }
 
     // todo: trigger downstream eviction and update state sizes
-    pub fn evict_mk_zombie(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
+    pub fn evict_mk_zombie(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) -> i128 {
       let t = self.zm.get_time().try_into().unwrap();
       self.zm.kh.advance_to(t);
       let mut total_freed_bytes = 0;
       self.report_state_sizes();
+      let mut min_value = 0;
       while total_freed_bytes < num_bytes && (!self.zm.kh.is_empty()) {
+        min_value = self.zm.kh.cur_min_value();
         let len = self.zm.kh.len();
 	if len % 10000 == 0 {
           println!("{}", len);
 	}
 	let entry = self.zm.kh.pop();
 	let (x, freed_bytes) = self.buffer_evict(&entry, ex);
-	// todo: I hate this clone(). anyway to remove it?
 	let y: Vec<(Vec<usize>, Vec<_>)> = x.into_iter().map(|(key_columns_, keys_)| (key_columns_.to_vec(), keys_)).collect();
 	for (key_columns, keys) in y {
           if !keys.is_empty() {
@@ -2909,6 +2912,7 @@ impl Domain {
 	total_freed_bytes += freed_bytes;
       }
       self.state_size.fetch_sub(total_freed_bytes, Ordering::AcqRel);
+      return min_value;
     }
 
     pub fn free_node(&mut self, node: LocalNodeIndex, num_bytes: usize, ex: &mut dyn Executor) {

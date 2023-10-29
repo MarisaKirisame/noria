@@ -96,6 +96,9 @@ def file(log_dir, filename, suffix):
     with a(href=f"{count}.{suffix}"):
         p(filename)
 
+def safe_div(l, r):
+    return 0 if r == 0 else l / r
+
 def single_eval(x):
     with doc(title=str(x)) as inner_doc:
         p(str(x))
@@ -104,6 +107,8 @@ def single_eval(x):
         recomputation_total_time = 0
         eviction_total_time = 0
         wait_total_time = 0
+        hit = 0
+        miss = 0
         if x.is_normal:
             files = []
             for y in os.listdir(x.log_dir):
@@ -124,12 +129,19 @@ def single_eval(x):
                                 if j["current_time"] >= x.warmup_finished_time:
                                     wait_total_time += j["spent_time"]
                                     total_time += j["spent_time"]
+                            elif j["command"] == "process":
+                                if j["current_time"] >= x.warmup_finished_time:
+                                    hit += j["hit"]
+                                    miss += j["miss"]
                             else:
                                 print(j)
                                 raise
                     files.append((-total_time, y))
             p(f"recomputation_total_time = {recomputation_total_time}")
             p(f"eviction_total_time = {eviction_total_time}")
+            p(f"hit = {hit}")
+            p(f"miss = {miss}")
+            p(f"miss rate = {safe_div(miss, hit + miss)}")
             files.sort()
             for (_, y) in files:
                 file(x.log_dir, y, "txt")
@@ -140,7 +152,7 @@ def single_eval(x):
     count = counter.count()
     with open(f"output/{count}.html", "w") as f:
         f.write(str(inner_doc))
-    return f"{count}.html", wait_total_time, eviction_total_time#, wait_total_time
+    return f"{count}.html", miss, eviction_total_time#, wait_total_time
 
 baseline_eviction_time = []
 zombie_eviction_time = []

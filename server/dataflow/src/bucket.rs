@@ -68,6 +68,9 @@ pub struct ZombieManager {
   pub time_spent_recomputing: Duration,
   pub total_time_spent_waiting_ms: u64,
   pub last_log_waiting: Instant,
+  pub num_hit: usize,
+  pub num_miss: usize,
+  pub last_log_process: Instant,
 }
 
 impl ZombieManager {
@@ -118,6 +121,9 @@ impl ZombieManager {
       time_spent_evicting: Duration::ZERO,
       time_spent_recomputing: Duration::ZERO,
       total_time_spent_waiting_ms: 0,
+      num_hit: 0,
+      num_miss: 0,
+      last_log_process: Instant::now(),
     }
   }
 
@@ -151,6 +157,19 @@ impl ZombieManager {
       self.write_json(json!({"command": "wait", "current_time": sys_time(), "spent_time": total_time_ms - self.total_time_spent_waiting_ms}));
       self.last_log_waiting = Instant::now();
       self.total_time_spent_waiting_ms = total_time_ms;
+    }
+  }
+
+  pub fn record_process(&mut self, num_hit: usize, num_miss: usize) {
+    if (num_hit != 0) || (num_miss != 0) {
+      self.num_hit += num_hit;
+      self.num_miss += num_miss;
+      if (self.last_log_process.elapsed().as_secs() >= 1) {
+        self.write_json(json!({"command": "process", "current_time": sys_time(), "hit": self.num_hit, "miss": self.num_miss}));
+        self.last_log_process = Instant::now();
+        self.num_hit = 0;
+	self.num_miss = 0;
+      }
     }
   }
 }
