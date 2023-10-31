@@ -2878,7 +2878,9 @@ impl Domain {
       
       assert!(num_bytes >= to_readers.try_into().unwrap());
       let to_zombie = num_bytes - to_readers;
-      self.evict_mk_zombie(to_zombie, ex)
+      println!("calling evict_mk_zombie... {}", thread::current().id().as_u64());
+      self.evict_mk_zombie(to_zombie, ex);
+      println!("evict_mk_zombie okk!... {}", thread::current().id().as_u64());
     }
 
     // todo: trigger downstream eviction and update state sizes
