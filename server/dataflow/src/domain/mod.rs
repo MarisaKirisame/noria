@@ -2876,17 +2876,13 @@ impl Domain {
       
       assert!(num_bytes >= to_readers.try_into().unwrap());
       let to_zombie = num_bytes - to_readers;
-      println!("calling evict_mk_zombie... {}", thread::current().id().as_u64());
       self.evict_mk_zombie(to_zombie, ex);
-      println!("evict_mk_zombie ok! {}", thread::current().id().as_u64());
     }
 
     // todo: trigger downstream eviction and update state sizes
     pub fn evict_mk_zombie(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
       let t = self.zm.get_time().try_into().unwrap();
-      println!("calling evict_mk_zombie_advance... {}", thread::current().id().as_u64());
       self.zm.kh.advance_to(t);
-      println!("evict_mk_zombie_advance ok! {}", thread::current().id().as_u64());
       let mut total_freed_bytes = 0;
       self.report_state_sizes();
       while total_freed_bytes < num_bytes && (!self.zm.kh.is_empty()) {
