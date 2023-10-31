@@ -36,7 +36,6 @@ def run(mb):
     print(result.stderr)
     print("for loop...")
     for x in result.stdout.splitlines():
-        print(x)
         result_pattern = "# generated ops/s:"
         if x.startswith(result_pattern):
             with open(f"{log_dir}/throughput", 'w') as f:

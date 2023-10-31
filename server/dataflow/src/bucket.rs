@@ -62,15 +62,19 @@ pub struct ZombieManager {
   pub created_time: Instant,
   pub fresh_bucket: usize,
   pub log: File,
-  pub last_log_evicting: Instant,
-  pub time_spent_evicting: Duration,
-  pub last_log_recomputing: Instant,
-  pub time_spent_recomputing: Duration,
+  pub last_log_eviction: Instant,
+  pub time_spent_eviction: Duration,
+  pub last_log_recomputation: Instant,
+  pub time_spent_recomputation: Duration,
   pub total_time_spent_waiting_ms: u64,
   pub last_log_waiting: Instant,
   pub num_hit: usize,
   pub num_miss: usize,
   pub last_log_process: Instant,
+  pub c_value: i128,
+  pub evict_record: HashMap<LocalNodeIndex, usize>,
+  pub last_log_individual_eviction: Instant,
+  pub last_update_size: Instant,
 }
 
 impl ZombieManager {
@@ -93,7 +97,7 @@ impl ZombieManager {
   }
   
   pub fn get_time(&self) -> u128 {
-    self.created_time.elapsed().as_millis()
+    self.created_time.elapsed().as_micros()
   }
 
   pub fn get_bucket(&mut self) -> Bucket {
@@ -111,19 +115,23 @@ impl ZombieManager {
       seen_materialize: 0,
       last_print: Instant::now(),
       created_time: Instant::now(),
-      last_log_evicting: Instant::now(),
-      last_log_recomputing: Instant::now(),
+      last_log_eviction: Instant::now(),
+      last_log_recomputation: Instant::now(),
       last_log_waiting: Instant::now(),
       fresh_bucket: 0,
       log: OpenOptions::new().write(true)
 			     .create_new(true)
                              .open(Self::log_path()).unwrap(),
-      time_spent_evicting: Duration::ZERO,
-      time_spent_recomputing: Duration::ZERO,
+      time_spent_eviction: Duration::ZERO,
+      time_spent_recomputation: Duration::ZERO,
       total_time_spent_waiting_ms: 0,
       num_hit: 0,
       num_miss: 0,
       last_log_process: Instant::now(),
+      c_value: 0,
+      evict_record: HashMap::new(),
+      last_log_individual_eviction: Instant::now(),
+      last_update_size: Instant::now(),
     }
   }
 
@@ -132,21 +140,21 @@ impl ZombieManager {
     self.log.write_all(b"\n").unwrap();
   }
 
-  pub fn record_eviction(&mut self, time: Duration, c_value: i128) {
-    self.time_spent_evicting += time;
-    if (self.last_log_evicting.elapsed().as_secs() >= 1) {
-      self.write_json(json!({"command": "eviction", "current_time": sys_time(), "spent_time": duration_to_millis(self.time_spent_evicting), "c_value": c_value}));
-      self.last_log_evicting = Instant::now();
-      self.time_spent_evicting = Duration::ZERO;
+  pub fn record_eviction(&mut self, time: Duration) {
+    self.time_spent_eviction += time;
+    if (self.last_log_eviction.elapsed().as_secs() >= 1) {
+      self.write_json(json!({"command": "eviction", "current_time": sys_time(), "spent_time": duration_to_millis(self.time_spent_eviction), "c_value": self.c_value}));
+      self.last_log_eviction = Instant::now();
+      self.time_spent_eviction = Duration::ZERO;
     }
   }
 
   pub fn record_recomputation(&mut self, time: Duration) {
-    self.time_spent_recomputing += time;
-    if (self.last_log_recomputing.elapsed().as_secs() >= 1) {
-      self.write_json(json!({"command": "recomputation", "current_time": sys_time(), "spent_time": duration_to_millis(self.time_spent_recomputing)}));
-      self.last_log_recomputing = Instant::now();
-      self.time_spent_recomputing = Duration::ZERO;
+    self.time_spent_recomputation += time;
+    if (self.last_log_recomputation.elapsed().as_secs() >= 1) {
+      self.write_json(json!({"command": "recomputation", "current_time": sys_time(), "spent_time": duration_to_millis(self.time_spent_recomputation)}));
+      self.last_log_recomputation = Instant::now();
+      self.time_spent_recomputation = Duration::ZERO;
     }
   }
 
@@ -170,6 +178,27 @@ impl ZombieManager {
         self.num_hit = 0;
 	self.num_miss = 0;
       }
+    }
+  }
+
+  pub fn record_individual_eviction(&mut self, i: LocalNodeIndex, m: usize) {
+    let e = self.evict_record.entry(i).or_insert(0);
+    *e += m;
+    if (self.last_log_individual_eviction.elapsed().as_secs() >= 5) {
+      let mut breakdown = serde_json::Map::<String, serde_json::Value>::new();
+      for x in &self.evict_record {
+        breakdown.insert(x.0.to_string(), json!(x.1));
+      }
+      self.write_json(json!({"command": "log_individual_eviction", "current_time": sys_time(), "breakdown": breakdown}));
+      self.last_log_individual_eviction = Instant::now();
+      self.evict_record = HashMap::new();
+    }
+  }
+
+  pub fn record_size(&mut self, m: usize) {
+    if (self.last_update_size.elapsed().as_secs() >= 1) {
+      self.write_json(json!({"command": "update_size", "current_time": sys_time(), "size": m}));
+      self.last_update_size = Instant::now();
     }
   }
 }

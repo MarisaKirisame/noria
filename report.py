@@ -99,6 +99,29 @@ def file(log_dir, filename, suffix):
 def safe_div(l, r):
     return 0 if r == 0 else l / r
 
+def plot_lines(lines, x_label, y_label):
+    for (name, values) in lines:
+        plt.plot(*zip(*values), label=name)
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.legend()
+    count = counter.count()
+    plt.savefig(f"output/{count}.png")
+    plt.clf()
+    img(src=f"{count}.png")
+
+def plot_bar_chart(breakdown):
+    sizes = []
+    labels = []
+    for (k, v) in breakdown.items():
+        labels.append(k)
+        sizes.append(v)
+    plt.pie(sizes, labels=labels)
+    count = counter.count()
+    plt.savefig(f"output/{count}.png")
+    plt.clf()
+    img(src=f"{count}.png")
+
 def single_eval(x):
     with doc(title=str(x)) as inner_doc:
         p(str(x))
@@ -109,11 +132,16 @@ def single_eval(x):
         wait_total_time = 0
         hit = 0
         miss = 0
+        c_values = []
+        memorys = []
+        breakdown = {}
         if x.is_normal:
             files = []
             for y in os.listdir(x.log_dir):
-                total_time = 0
                 if y.endswith(".log"):
+                    total_time = 0
+                    c_value = []
+                    memory = []
                     with open(f"{x.log_dir}/{y}") as f:
                         for l in f.readlines():
                             j = eval(l)
@@ -125,6 +153,7 @@ def single_eval(x):
                                 if j["current_time"] >= x.warmup_finished_time:
                                     eviction_total_time += j["spent_time"]
                                     total_time += j["spent_time"]
+                                    c_value.append((j["current_time"], j["c_value"]))
                             elif j["command"] == "wait":
                                 if j["current_time"] >= x.warmup_finished_time:
                                     wait_total_time += j["spent_time"]
@@ -133,10 +162,26 @@ def single_eval(x):
                                 if j["current_time"] >= x.warmup_finished_time:
                                     hit += j["hit"]
                                     miss += j["miss"]
+                            elif j["command"] == "update_size":
+                                memory.append((j["current_time"], j["size"]))
+                            elif j["command"] == "log_individual_eviction":
+                                if j["current_time"] >= x.warmup_finished_time:
+                                    for (k, v) in j["breakdown"].items():
+                                        if k not in breakdown:
+                                            breakdown[k] = 0
+                                        breakdown[k] += v
                             else:
+                                print(x)
                                 print(j)
                                 raise
                     files.append((-total_time, y))
+                    if len(c_value) > 0:
+                        c_values.append((y, c_value))
+                    if len(memory) > 0:
+                        memorys.append((y, memory))
+            plot_bar_chart(breakdown)
+            plot_lines(c_values, "time", "c_value")
+            plot_lines(memorys, "time", "memory")
             p(f"recomputation_total_time = {recomputation_total_time}")
             p(f"eviction_total_time = {eviction_total_time}")
             p(f"hit = {hit}")

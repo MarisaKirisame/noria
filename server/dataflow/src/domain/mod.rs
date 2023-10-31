@@ -2752,14 +2752,12 @@ impl Domain {
 
     pub fn evict(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
         let before = Instant::now();
-	let c_value =
-	    if !ZombieManager::use_zombie() {
-	        self.evict_baseline(num_bytes, ex);
-  	        0
-	    } else {
-                self.evict_mk(num_bytes, ex)
-	    };
-	self.zm.record_eviction(before.elapsed(), c_value);
+        if !ZombieManager::use_zombie() {
+            self.evict_baseline(num_bytes, ex);
+        } else {
+            self.evict_mk(num_bytes, ex);
+        };
+	self.zm.record_eviction(before.elapsed());
     }
     
     pub fn evict_baseline(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
@@ -2834,7 +2832,6 @@ impl Domain {
       if !sb.map.contains_key(&khe.idx) {
         sb.map.insert(khe.idx, EvictEntry {b: HashSet::new(), mem:0});
       }
-
       let mut ee = sb.map.get_mut(&khe.idx).unwrap();
       let freshly_inserted = ee.b.insert(khe.b);
       assert!(freshly_inserted);
@@ -2843,13 +2840,14 @@ impl Domain {
       if ee.mem * 10 >= st.deep_size_of().try_into().unwrap() {
 	let ret = st.evict_bucket(&ee.b);
 	sb.map.remove(&khe.idx);
+	self.zm.record_individual_eviction(khe.idx, ret.1);
 	ret
       } else {
         (vec![], 0)
       }
     }
 
-    pub fn evict_mk(&mut self, num_bytes: usize, ex: &mut dyn Executor) -> i128 {
+    pub fn evict_mk(&mut self, num_bytes: usize, ex: &mut dyn Executor) {
       // turned out that reader do consume significant amounts of memory,
       // but zombie does not handle reader yet.
       // to fix this, we spread the eviction budget proportionally across partial readers and zombies.
@@ -2881,14 +2879,13 @@ impl Domain {
     }
 
     // todo: trigger downstream eviction and update state sizes
-    pub fn evict_mk_zombie(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) -> i128 {
+    pub fn evict_mk_zombie(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
       let t = self.zm.get_time().try_into().unwrap();
       self.zm.kh.advance_to(t);
       let mut total_freed_bytes = 0;
       self.report_state_sizes();
-      let mut min_value = 0;
       while total_freed_bytes < num_bytes && (!self.zm.kh.is_empty()) {
-        min_value = self.zm.kh.cur_min_value();
+        self.zm.c_value = self.zm.kh.cur_min_value();
         let len = self.zm.kh.len();
 	if len % 10000 == 0 {
           println!("{}", len);
@@ -2914,10 +2911,10 @@ impl Domain {
 	total_freed_bytes += freed_bytes;
       }
       self.state_size.fetch_sub(total_freed_bytes, Ordering::AcqRel);
-      return min_value;
     }
 
     pub fn free_node(&mut self, node: LocalNodeIndex, num_bytes: usize, ex: &mut dyn Executor) {
+        self.zm.record_individual_eviction(node, num_bytes);
         let mut freed: usize = 0;
         let mut n = self.nodes[node].borrow_mut();
         while freed < num_bytes {
@@ -3130,6 +3127,7 @@ impl Domain {
     
     pub fn update_state_sizes(&mut self) {
         let partial = self.get_state_sizes(true);
+	self.zm.record_size(partial);
         self.state_size.store(partial as usize, Ordering::Release);
     }
 
