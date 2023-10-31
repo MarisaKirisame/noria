@@ -7,9 +7,9 @@ import shutil
 
 shutil.rmtree("log", ignore_errors=True)
 
-CONFIG = {"memory": 80, "scale": 1, "use_zombie": 1} # debugging
+#CONFIG = {"memory": 80, "scale": 1, "use_zombie": 1} # debugging
 #CONFIG = {"memory": NONDET(60, 80, 100), "scale": 1, "use_zombie": NONDET(0, 1)}
-#CONFIG = {"memory": NONDET(30, 40, 50, 60, 70, 80, 90, 100, 110, 120), "scale": 1, "use_zombie": NONDET(0, 1)} # trying a bigger run
+CONFIG = {"memory": NONDET(30, 40, 50, 60, 70, 80, 90, 100, 110, 120), "scale": 1, "use_zombie": NONDET(0, 1)} # trying a bigger run
 
 subprocess.run("cargo update", shell=True, check=True)
 subprocess.run("cargo build --release --bin noria-server", shell=True, check=True)
