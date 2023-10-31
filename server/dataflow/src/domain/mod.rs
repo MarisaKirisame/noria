@@ -2883,19 +2883,19 @@ impl Domain {
 
     // todo: trigger downstream eviction and update state sizes
     pub fn evict_mk_zombie(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
+      println!("calling evict_mk_zombie_top... {}", thread::current().id().as_u64());
       let t = self.zm.get_time().try_into().unwrap();
       self.zm.kh.advance_to(t);
       let mut total_freed_bytes = 0;
       self.report_state_sizes();
+      println!("evict_mk_zombie_top ok! {}", thread::current().id().as_u64());
       while total_freed_bytes < num_bytes && (!self.zm.kh.is_empty()) {
         self.zm.c_value = self.zm.kh.cur_min_value();
         let len = self.zm.kh.len();
 	if len % 10000 == 0 {
           println!("{}", len);
 	}
-        println!("calling pop... {}", thread::current().id().as_u64());
 	let entry = self.zm.kh.pop();
-        println!("pop ok! {}", thread::current().id().as_u64());
 	let (x, freed_bytes) = self.buffer_evict(&entry, ex);
 	let y: Vec<(Vec<usize>, Vec<_>)> = x.into_iter().map(|(key_columns_, keys_)| (key_columns_.to_vec(), keys_)).collect();
 	for (key_columns, keys) in y {
