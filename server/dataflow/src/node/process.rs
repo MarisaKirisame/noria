@@ -381,7 +381,7 @@ pub(crate) fn materialize(
 	  Negative(v) => { zm.seen_rm += 1 }
 	});
       zm.seen_materialize += 1;
-      if (mem_usage > 0) {
+      if (false && mem_usage > 0) {
         let t = zm.get_time() as i64;
 	//serde_json::to_writer(&zm.log, &serde_json::json!({"mem_usage":mem_usage, "t": t})).unwrap();
 	//writeln!(&zm.log).unwrap();
