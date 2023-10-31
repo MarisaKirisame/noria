@@ -2756,10 +2756,8 @@ impl Domain {
         if !ZombieManager::use_zombie() {
             self.evict_baseline(num_bytes, ex);
         } else {
-	    println!("calling evict_mk... {}", thread::current().id().as_u64());
             self.evict_mk(num_bytes, ex);
-	    println!("evict_mk ok {}!", thread::current().id().as_u64());
-        };
+       };
 	self.zm.record_eviction(before.elapsed());
     }
     
@@ -2880,7 +2878,7 @@ impl Domain {
       let to_zombie = num_bytes - to_readers;
       println!("calling evict_mk_zombie... {}", thread::current().id().as_u64());
       self.evict_mk_zombie(to_zombie, ex);
-      println!("evict_mk_zombie okk!... {}", thread::current().id().as_u64());
+      println!("evict_mk_zombie ok! {}", thread::current().id().as_u64());
     }
 
     // todo: trigger downstream eviction and update state sizes
@@ -2895,7 +2893,9 @@ impl Domain {
 	if len % 10000 == 0 {
           println!("{}", len);
 	}
+        println!("calling pop... {}", thread::current().id().as_u64());
 	let entry = self.zm.kh.pop();
+        println!("pop ok! {}", thread::current().id().as_u64());
 	let (x, freed_bytes) = self.buffer_evict(&entry, ex);
 	let y: Vec<(Vec<usize>, Vec<_>)> = x.into_iter().map(|(key_columns_, keys_)| (key_columns_.to_vec(), keys_)).collect();
 	for (key_columns, keys) in y {
