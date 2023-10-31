@@ -2755,7 +2755,9 @@ impl Domain {
         if !ZombieManager::use_zombie() {
             self.evict_baseline(num_bytes, ex);
         } else {
+	    println!("calling evict_mk...");
             self.evict_mk(num_bytes, ex);
+	    println!("evict_mk ok!");
         };
 	self.zm.record_eviction(before.elapsed());
     }
