@@ -3,6 +3,7 @@
 #![cfg_attr(debug, feature(is_sorted))]
 #![deny(unused_extern_crates)]
 #![allow(clippy::redundant_closure)]
+#![feature(thread_id_value)]
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]

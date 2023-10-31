@@ -27,6 +27,7 @@ use crate::bucket::ZombieManager;
 use zombie_sys::KineticHeap;
 use std::convert::TryInto;
 use crate::bucket::*;
+use std::thread;
 
 #[derive(Debug)]
 pub enum PollEvent {
@@ -2755,9 +2756,9 @@ impl Domain {
         if !ZombieManager::use_zombie() {
             self.evict_baseline(num_bytes, ex);
         } else {
-	    println!("calling evict_mk...");
+	    println!("calling evict_mk... {}", thread::current().id().as_u64());
             self.evict_mk(num_bytes, ex);
-	    println!("evict_mk ok!");
+	    println!("evict_mk ok {}!", thread::current().id().as_u64());
         };
 	self.zm.record_eviction(before.elapsed());
     }
