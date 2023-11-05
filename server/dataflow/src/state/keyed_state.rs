@@ -39,8 +39,7 @@ impl KeyedState {
       let mut vec = Vec::new();
       hm.extract_if(|_, rs| {
         let mut hit = false;
-	let mut freed = 0;
-	rs.extract_if();
+        let mut freed = 0;
         rs.iter().for_each(|r| {
           if b.contains(&r.1) {
 	    hit = true;
