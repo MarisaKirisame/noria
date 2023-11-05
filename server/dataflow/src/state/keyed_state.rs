@@ -40,6 +40,7 @@ impl KeyedState {
       hm.extract_if(|_, rs| {
         let mut hit = false;
 	let mut freed = 0;
+	rs.extract_if();
         rs.iter().for_each(|r| {
           if b.contains(&r.1) {
 	    hit = true;
