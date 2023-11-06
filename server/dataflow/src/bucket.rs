@@ -149,6 +149,10 @@ impl ZombieManager {
     }
   }
 
+  pub fn count_downstream(&self) -> bool {
+    true
+  }
+  
   pub fn record_recomputation(&mut self, time: Duration) {
     self.time_spent_recomputation += time;
     if (self.last_log_recomputation.elapsed().as_secs() >= 1) {

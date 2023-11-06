@@ -2678,7 +2678,8 @@ impl Domain {
         shard: Option<usize>,
         state: &mut StateMap,
         nodes: &DomainNodes,
-    ) {
+    ) -> usize {
+        let mut usize = 0;
         // TODO: this is a linear walk of replay paths -- we should make that not linear
         for (tag, ref path) in replay_paths {
             if path.source == Some(node) {
@@ -2711,8 +2712,8 @@ impl Domain {
                         continue;
                     }
 
-                    state[target.node].evict_keys(*tag, &keys[..]);
-                    Self::trigger_downstream_evictions(
+                    usize += state[target.node].evict_keys(*tag, &keys[..]).map(|(l, r)| r).unwrap_or(0);
+                    usize += Self::trigger_downstream_evictions(
                         log,
                         &target.partial_key.as_ref().unwrap()[..],
                         &keys[..],
@@ -2727,6 +2728,7 @@ impl Domain {
                 }
             }
         }
+	usize
     }
 
     fn walk_path(
@@ -2896,7 +2898,7 @@ impl Domain {
 	let y: Vec<(Vec<usize>, Vec<_>)> = x.into_iter().map(|(key_columns_, keys_)| (key_columns_.to_vec(), keys_)).collect();
 	for (key_columns, keys) in y {
           if !keys.is_empty() {
-            Self::trigger_downstream_evictions(
+            let downstream_bytes = Self::trigger_downstream_evictions(
               &self.log,
               &key_columns[..],
               &keys[..],
@@ -2907,6 +2909,9 @@ impl Domain {
               self.shard,
               &mut self.state,
               &self.nodes,);
+	    if self.zm.count_downstream() {
+	      total_freed_bytes += downstream_bytes;
+	    }
           }
 	}
 	total_freed_bytes += freed_bytes;
