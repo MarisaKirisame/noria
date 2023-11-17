@@ -234,7 +234,7 @@ impl Ingredient for Join {
         replay_key_cols: Option<&[usize]>,
         nodes: &DomainNodes,
         state: &StateMap,
-	br: BRecorder,
+	br: &mut BRecorder,
     ) -> ProcessingResult {
         let mut misses = Vec::new();
         let mut lookups = Vec::new();
@@ -301,7 +301,7 @@ impl Ingredient for Join {
                         &KeyType::Single(&prev_join_key),
                         nodes,
                         state,
-			br.clone(),
+			br,
                     )
                     .unwrap();
 
@@ -344,7 +344,7 @@ impl Ingredient for Join {
                     &KeyType::Single(&prev_join_key),
                     nodes,
                     state,
-		    br.clone(),
+		    br,
                 )
                 .unwrap();
 

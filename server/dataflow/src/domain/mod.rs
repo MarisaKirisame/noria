@@ -1616,7 +1616,7 @@ impl Domain {
 
                 let mut rs = Vec::new();
                 let (keys, misses): (HashSet<_>, _) = keys.into_iter().partition(|key| match state
-                    .lookup(&cols[..], &KeyType::from(key), self.zm.br.clone())
+                    .lookup(&cols[..], &KeyType::from(key), &mut self.zm.br)
                 {
                     LookupResult::Some(res) => {
                         rs.extend(res.into_iter().map(|r| self.seed_row(source, r)));
@@ -1746,7 +1746,7 @@ impl Domain {
                     .state
                     .get(source)
                     .expect("migration replay path started with non-materialized node")
-                    .lookup(&cols[..], &KeyType::from(&key[..]), self.zm.br.clone());
+                    .lookup(&cols[..], &KeyType::from(&key[..]), &mut self.zm.br);
 
                 let mut k = HashSet::new();
                 k.insert(key.clone().into_owned());

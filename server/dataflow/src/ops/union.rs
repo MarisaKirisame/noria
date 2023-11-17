@@ -200,7 +200,7 @@ impl Ingredient for Union {
         _: Option<&[usize]>,
         _: &DomainNodes,
         _: &StateMap,
-	_: BRecorder,
+	_: &mut BRecorder,
     ) -> ProcessingResult {
         match self.emit {
             Emit::AllFrom(..) => ProcessingResult {
@@ -242,7 +242,7 @@ impl Ingredient for Union {
         n: &DomainNodes,
         s: &StateMap,
         log: &Logger,
-	br: BRecorder,
+	br: &mut BRecorder,
     ) -> RawProcessingResult {
         use std::mem;
 
@@ -680,7 +680,7 @@ impl Ingredient for Union {
                             pieces.buffered.into_iter()
                         })
                         .flat_map(|(from, rs)| {
-                            self.on_input(ex, from, rs, Some(&key_cols[..]), n, s, br.clone())
+                            self.on_input(ex, from, rs, Some(&key_cols[..]), n, s, br)
                                 .results
                         })
                         .collect()

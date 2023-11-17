@@ -135,7 +135,7 @@ impl State for MemoryState {
         self.mem_size = self.mem_size.checked_sub(freed_bytes).unwrap();
     }
 
-    fn lookup<'a>(&'a self, columns: &[usize], key: &KeyType, br: BRecorder) -> LookupResult<'a> {
+    fn lookup<'a>(&'a self, columns: &[usize], key: &KeyType, br: &mut BRecorder) -> LookupResult<'a> {
         debug_assert!(!self.state.is_empty(), "lookup on uninitialized index");
         let index = self
             .state_for(columns)

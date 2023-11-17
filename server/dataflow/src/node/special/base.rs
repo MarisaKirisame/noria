@@ -138,7 +138,7 @@ impl Base {
         us: LocalNodeIndex,
         mut ops: Vec<TableOperation>,
         state: &StateMap,
-	br: BRecorder,
+	br: &mut BRecorder,
     ) -> Records {
         if self.primary_key.is_none() || ops.is_empty() {
             return ops
@@ -166,7 +166,7 @@ impl Base {
             .expect("base with primary key must be materialized");
 
         let get_current = |current_key: &'_ _| {
-            match db.lookup(key_cols, &KeyType::from(current_key), br.clone()) {
+            match db.lookup(key_cols, &KeyType::from(current_key), br) {
                 LookupResult::Some(rows) => {
                     match rows.len() {
                         0 => None,

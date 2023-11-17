@@ -52,7 +52,7 @@ impl Ingredient for Latest {
         replay_key_cols: Option<&[usize]>,
         _: &DomainNodes,
         state: &StateMap,
-	br: BRecorder,
+	br: &mut BRecorder,
     ) -> ProcessingResult {
         debug_assert_eq!(from, *self.src);
 
@@ -74,7 +74,7 @@ impl Ingredient for Latest {
                     return None;
                 }
 
-                match db.lookup(&[self.key], &KeyType::Single(&r[self.key]), br.clone()) {
+                match db.lookup(&[self.key], &KeyType::Single(&r[self.key]), br) {
                     LookupResult::Some(rs) => {
                         if replay_key_cols.is_some() {
                             lookups.push(Lookup {

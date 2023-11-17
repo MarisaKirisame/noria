@@ -44,7 +44,7 @@ impl Ingredient for Distinct {
         _: Option<&[usize]>,
         _: &DomainNodes,
         state: &StateMap,
-	br: BRecorder,
+	br: &mut BRecorder,
     ) -> ProcessingResult {
         debug_assert_eq!(from, *self.src);
 
@@ -113,7 +113,7 @@ impl Ingredient for Distinct {
             prev_pos = rec.is_positive();
 
             let positive = rec.is_positive();
-            match db.lookup(group_by, &KeyType::from(&group[..]), br.clone()) {
+            match db.lookup(group_by, &KeyType::from(&group[..]), br) {
                 LookupResult::Some(rr) => {
                     if positive {
                         //println!("record {:?}", rr);

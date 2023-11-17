@@ -51,7 +51,7 @@ impl Node {
                         inner, mut senders, ..
                     }) => {
                         let Input { dst, data } = unsafe { inner.take() };
-                        let mut rs = b.process(addr, data, &*state, zm.br.clone());
+                        let mut rs = b.process(addr, data, &*state, &mut zm.br);
 
                         // When a replay originates at a base node, we replay the data *through* that
                         // same base node because its column set may have changed. However, this replay
@@ -145,7 +145,7 @@ impl Node {
                     // we need to own the data
                     let old_data = mem::take(data);
 		    let b4 = time::Instant::now();
-		    let oir = i.on_input_raw(ex, from, old_data, replay, nodes, state, log, zm.br.clone());
+		    let oir = i.on_input_raw(ex, from, old_data, replay, nodes, state, log, &mut zm.br);
 		    duration = Some(b4.elapsed());
                     match oir {
                         RawProcessingResult::Regular(m) => {

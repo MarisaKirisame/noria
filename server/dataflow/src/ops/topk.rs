@@ -121,7 +121,7 @@ impl Ingredient for TopK {
         replay_key_cols: Option<&[usize]>,
         _: &DomainNodes,
         state: &StateMap,
-	br: BRecorder,
+	br: &mut BRecorder,
     ) -> ProcessingResult {
         debug_assert_eq!(from, *self.src);
 
@@ -239,7 +239,7 @@ impl Ingredient for TopK {
                 grp.extend(group_by.iter().map(|&col| &r[col]).cloned());
 
                 // check out current state
-                match db.lookup(&group_by[..], &KeyType::from(&grp[..]), br.clone()) {
+                match db.lookup(&group_by[..], &KeyType::from(&grp[..]), br) {
                     LookupResult::Some(rs) => {
                         if replay_key_cols.is_some() {
                             lookups.push(Lookup {

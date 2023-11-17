@@ -20,16 +20,11 @@ use std::sync::Arc;
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, Debug, Serialize, Deserialize, Default)]
 pub struct Bucket(pub usize); // maybe u32 is enough
 
-pub struct BRecorderInner {
-  pub mem: usize // write
-}
-
-#[derive(Clone)]
-pub struct BRecorder(pub Arc<RefCell<BRecorderInner>>);
+pub struct BRecorder(pub usize);
 
 impl BRecorder {
   pub fn new() -> BRecorder {
-    BRecorder(Arc::new(RefCell::new(BRecorderInner { mem:0 })))
+    BRecorder(0)
   }
 }
 

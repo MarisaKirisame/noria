@@ -139,7 +139,7 @@ impl Ingredient for Project {
         key: &KeyType,
         nodes: &DomainNodes,
         states: &'a StateMap,
-	rb: BRecorder,
+	br: &mut BRecorder,
     ) -> Option<Option<Box<dyn Iterator<Item = Cow<'a, [DataType]>> + 'a>>> {
         let emit = self.emit.clone();
         let additional = self.additional.clone();
@@ -162,7 +162,7 @@ impl Ingredient for Project {
             );
         }
 
-        self.lookup(*self.src, &*in_cols, key, nodes, states, rb)
+        self.lookup(*self.src, &*in_cols, key, nodes, states, br)
             .and_then(|result| match result {
                 Some(rs) => {
                     let r = match emit {
@@ -229,7 +229,7 @@ impl Ingredient for Project {
         _: Option<&[usize]>,
         _: &DomainNodes,
         _: &StateMap,
-	_: BRecorder,
+	_: &mut BRecorder,
     ) -> ProcessingResult {
         debug_assert_eq!(from, *self.src);
         if let Some(ref emit) = self.emit {

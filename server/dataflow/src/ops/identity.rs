@@ -39,7 +39,7 @@ impl Ingredient for Identity {
         _: Option<&[usize]>,
         _: &DomainNodes,
         _: &StateMap,
-	_: BRecorder,
+	_: &mut BRecorder,
     ) -> ProcessingResult {
         ProcessingResult {
             results: rs,

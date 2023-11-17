@@ -154,7 +154,7 @@ impl Ingredient for NodeOperator {
         replay_key_col: Option<&[usize]>,
         domain: &DomainNodes,
         states: &StateMap,
-	br: BRecorder,
+	br: &mut BRecorder,
     ) -> ProcessingResult {
         impl_ingredient_fn_mut!(
             self,
@@ -177,7 +177,7 @@ impl Ingredient for NodeOperator {
         domain: &DomainNodes,
         states: &StateMap,
         log: &Logger,
-	br: BRecorder,
+	br: &mut BRecorder,
     ) -> RawProcessingResult {
         impl_ingredient_fn_mut!(
             self,
@@ -205,7 +205,7 @@ impl Ingredient for NodeOperator {
         key: &KeyType,
         nodes: &DomainNodes,
         states: &'a StateMap,
-	br: BRecorder,
+	br: &mut BRecorder,
     ) -> Option<Option<Box<dyn Iterator<Item = Cow<'a, [DataType]>> + 'a>>> {
         impl_ingredient_fn_ref!(self, query_through, columns, key, nodes, states, br)
     }
@@ -217,7 +217,7 @@ impl Ingredient for NodeOperator {
         key: &KeyType,
         domain: &DomainNodes,
         states: &'a StateMap,
-	br: BRecorder,
+	br: &mut BRecorder,
     ) -> Option<Option<Box<dyn Iterator<Item = Cow<'a, [DataType]>> + 'a>>> {
         impl_ingredient_fn_ref!(self, lookup, parent, columns, key, domain, states, br)
     }

@@ -166,7 +166,7 @@ where
         replay_key_cols: Option<&[usize]>,
         _: &DomainNodes,
         state: &StateMap,
-	br: BRecorder,
+	br: &mut BRecorder,
     ) -> ProcessingResult {
         debug_assert_eq!(from, *self.src);
 
@@ -211,7 +211,7 @@ where
                     let group = get_group_values(group_by, group_rs.peek().unwrap());
 
                     let rs = {
-                        match db.lookup(&out_key[..], &KeyType::from(&group[..]), br.clone()) {
+                        match db.lookup(&out_key[..], &KeyType::from(&group[..]), br) {
                             LookupResult::Some(rs) => {
                                 if replay_key_cols.is_some() {
                                     lookups.push(Lookup {

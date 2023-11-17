@@ -80,7 +80,7 @@ impl Ingredient for Rewrite {
         replay_key_cols: Option<&[usize]>,
         nodes: &DomainNodes,
         state: &StateMap,
-	br: BRecorder,
+	br: &mut BRecorder,
     ) -> ProcessingResult {
         debug_assert!(from == *self.src || from == *self.signal);
         let mut misses = Vec::new();
@@ -101,7 +101,7 @@ impl Ingredient for Rewrite {
                 let key = r[self.signal_key].clone();
                 // ask signal if column should be rewritten
                 let rc = self
-                    .lookup(*self.signal, &[0], &KeyType::Single(&key), nodes, state, br.clone())
+                    .lookup(*self.signal, &[0], &KeyType::Single(&key), nodes, state, br)
                     .unwrap();
 
                 if rc.is_none() {
@@ -140,7 +140,7 @@ impl Ingredient for Rewrite {
                         &KeyType::Single(&key),
                         nodes,
                         state,
-			br.clone(),
+			br,
                     )
                     .unwrap();
 
