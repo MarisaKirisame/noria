@@ -165,7 +165,7 @@ impl Base {
             .get(us)
             .expect("base with primary key must be materialized");
 
-        let get_current = |current_key: &'_ _| {
+        let mut get_current = |current_key: &'_ _| {
             match db.lookup(key_cols, &KeyType::from(current_key), br) {
                 LookupResult::Some(rows) => {
                     match rows.len() {

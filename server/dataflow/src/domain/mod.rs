@@ -1570,15 +1570,15 @@ impl Domain {
         }
     }
 
-    fn seed_row<'a>(&self, source: LocalNodeIndex, row: Cow<'a, [DataType]>) -> Record {
-        if let Some(&(start, ref defaults)) = self.ingress_inject.get(source) {
+    fn seed_row<'a>(ingress_inject: &Map<(usize, Vec<DataType>)>, nodes: &DomainNodes, source: LocalNodeIndex, row: Cow<'a, [DataType]>) -> Record {
+        if let Some(&(start, ref defaults)) = ingress_inject.get(source) {
             let mut v = Vec::with_capacity(start + defaults.len());
             v.extend(row.iter().cloned());
             v.extend(defaults.iter().cloned());
             return (v, true).into();
         }
 
-        let n = self.nodes[source].borrow();
+        let n = nodes[source].borrow();
         if let Some(b) = n.get_base() {
             let mut row = row.into_owned();
             b.fix(&mut row);
@@ -1615,11 +1615,14 @@ impl Domain {
                     .expect("migration replay path started with non-materialized node");
 
                 let mut rs = Vec::new();
+		let ref ingress_inject = &self.ingress_inject;
+		let ref nodes = &self.nodes;
+		let ref mut br = &mut self.zm.br;
                 let (keys, misses): (HashSet<_>, _) = keys.into_iter().partition(|key| match state
-                    .lookup(&cols[..], &KeyType::from(key), &mut self.zm.br)
+                    .lookup(&cols[..], &KeyType::from(key), br)
                 {
                     LookupResult::Some(res) => {
-                        rs.extend(res.into_iter().map(|r| self.seed_row(source, r)));
+                        rs.extend(res.into_iter().map(|r| Domain::seed_row(ingress_inject, nodes, source, r)));
                         true
                     }
                     LookupResult::Missing => false,
@@ -1752,7 +1755,7 @@ impl Domain {
                 k.insert(key.clone().into_owned());
                 if let LookupResult::Some(rs) = rs {
                     use std::iter::FromIterator;
-                    let data = Records::from_iter(rs.into_iter().map(|r| self.seed_row(source, r)));
+                    let data = Records::from_iter(rs.into_iter().map(|r| Domain::seed_row(&self.ingress_inject, &self.nodes, source, r)));
 
                     let m = Some(Box::new(Packet::ReplayPiece {
                         link: Link::new(source, path[0].node),

@@ -5,8 +5,6 @@ use rand::prelude::*;
 use std::borrow::Cow;
 use std::sync::Arc;
 use crate::bucket::*;
-use common::Record::*;
-use std::time::Instant;
 
 /// Allocate a new end-user facing result table.
 pub(crate) fn new(cols: usize, key: &[usize]) -> (SingleReadHandle, WriteHandle) {

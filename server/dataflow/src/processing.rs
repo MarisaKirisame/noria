@@ -187,7 +187,7 @@ where
         replay_key_cols: Option<&[usize]>,
         domain: &DomainNodes,
         states: &StateMap,
-	br: &mut BRecorder,
+	_br: &mut BRecorder,
     ) -> ProcessingResult;
 
     #[allow(clippy::too_many_arguments)]
@@ -229,7 +229,7 @@ where
         _key: &KeyType,
         _nodes: &DomainNodes,
         _states: &'a StateMap,
-	br: &mut BRecorder,
+	_br: &mut BRecorder,
     ) -> Option<Option<Box<dyn Iterator<Item = Cow<'a, [DataType]>> + 'a>>> {
         None
     }
@@ -251,13 +251,12 @@ where
         states: &'a StateMap,
 	br: &mut BRecorder,
     ) -> Option<Option<Box<dyn Iterator<Item = Cow<'a, [DataType]>> + 'a>>> {
-        states
-            .get(parent)
-            .and_then(move |state| match state.lookup(columns, key, br) {
-                LookupResult::Some(rs) => Some(Some(Box::new(rs.into_iter()) as Box<_>)),
+        match states.get(parent) {
+            Some(state) => match state.lookup(columns, key, br) {
+	        LookupResult::Some(rs) => Some(Some(Box::new(rs.into_iter()) as Box<_>)),
                 LookupResult::Missing => Some(None),
-            })
-            .or_else(|| {
+	    }
+	    None => {
                 // this is a long-shot.
                 // if our ancestor can be queried *through*, then we just use that state instead
                 let parent = nodes[parent].borrow();
@@ -266,7 +265,8 @@ where
                 } else {
                     None
                 }
-            })
+	    }
+	}
     }
 
     /// Translate a column in this ingredient into the corresponding column(s) in
