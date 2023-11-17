@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-
+use crate::bucket::BRecorder;
 use crate::prelude::*;
 
 /// Latest provides an operator that will maintain the last record for every group.
@@ -52,6 +52,7 @@ impl Ingredient for Latest {
         replay_key_cols: Option<&[usize]>,
         _: &DomainNodes,
         state: &StateMap,
+	br: BRecorder,
     ) -> ProcessingResult {
         debug_assert_eq!(from, *self.src);
 
@@ -73,7 +74,7 @@ impl Ingredient for Latest {
                     return None;
                 }
 
-                match db.lookup(&[self.key], &KeyType::Single(&r[self.key])) {
+                match db.lookup(&[self.key], &KeyType::Single(&r[self.key]), br.clone()) {
                     LookupResult::Some(rs) => {
                         if replay_key_cols.is_some() {
                             lookups.push(Lookup {

@@ -1,7 +1,7 @@
 use slog::Logger;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
-
+use crate::bucket::BRecorder;
 use crate::ops;
 use crate::prelude::*;
 
@@ -187,6 +187,7 @@ where
         replay_key_cols: Option<&[usize]>,
         domain: &DomainNodes,
         states: &StateMap,
+	br: BRecorder,
     ) -> ProcessingResult;
 
     #[allow(clippy::too_many_arguments)]
@@ -199,6 +200,7 @@ where
         domain: &DomainNodes,
         states: &StateMap,
         _: &Logger,
+	br: BRecorder,
     ) -> RawProcessingResult {
         RawProcessingResult::Regular(self.on_input(
             executor,
@@ -207,6 +209,7 @@ where
             replay.key(),
             domain,
             states,
+	    br,
         ))
     }
 
@@ -226,6 +229,7 @@ where
         _key: &KeyType,
         _nodes: &DomainNodes,
         _states: &'a StateMap,
+	br: BRecorder,
     ) -> Option<Option<Box<dyn Iterator<Item = Cow<'a, [DataType]>> + 'a>>> {
         None
     }
@@ -245,10 +249,12 @@ where
         key: &KeyType,
         nodes: &DomainNodes,
         states: &'a StateMap,
+	br: BRecorder,
     ) -> Option<Option<Box<dyn Iterator<Item = Cow<'a, [DataType]>> + 'a>>> {
+        let brc = br.clone();
         states
             .get(parent)
-            .and_then(move |state| match state.lookup(columns, key) {
+            .and_then(move |state| match state.lookup(columns, key, br) {
                 LookupResult::Some(rs) => Some(Some(Box::new(rs.into_iter()) as Box<_>)),
                 LookupResult::Missing => Some(None),
             })
@@ -257,7 +263,7 @@ where
                 // if our ancestor can be queried *through*, then we just use that state instead
                 let parent = nodes[parent].borrow();
                 if parent.is_internal() {
-                    parent.query_through(columns, key, nodes, states)
+                    parent.query_through(columns, key, nodes, states, brc)
                 } else {
                     None
                 }

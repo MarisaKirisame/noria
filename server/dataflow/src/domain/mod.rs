@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::mem;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use std::time;
 use std::time::Instant;
 
@@ -27,7 +27,6 @@ use crate::bucket::ZombieManager;
 use zombie_sys::KineticHeap;
 use std::convert::TryInto;
 use crate::bucket::*;
-use std::thread;
 
 #[derive(Debug)]
 pub enum PollEvent {
@@ -1617,7 +1616,7 @@ impl Domain {
 
                 let mut rs = Vec::new();
                 let (keys, misses): (HashSet<_>, _) = keys.into_iter().partition(|key| match state
-                    .lookup(&cols[..], &KeyType::from(key))
+                    .lookup(&cols[..], &KeyType::from(key), self.zm.br.clone())
                 {
                     LookupResult::Some(res) => {
                         rs.extend(res.into_iter().map(|r| self.seed_row(source, r)));
@@ -1747,7 +1746,7 @@ impl Domain {
                     .state
                     .get(source)
                     .expect("migration replay path started with non-materialized node")
-                    .lookup(&cols[..], &KeyType::from(&key[..]));
+                    .lookup(&cols[..], &KeyType::from(&key[..]), self.zm.br.clone());
 
                 let mut k = HashSet::new();
                 k.insert(key.clone().into_owned());
@@ -2753,7 +2752,7 @@ impl Domain {
         }
     }
 
-    pub fn evict(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
+    pub fn evict(&mut self, num_bytes: usize, ex: &mut dyn Executor) {
         let before = Instant::now();
         if !ZombieManager::use_zombie() {
             self.evict_baseline(num_bytes, ex);
@@ -2893,7 +2892,7 @@ impl Domain {
           println!("{}", len);
 	}
 	let entry = 
-	if (ZombieManager::use_kh()) {
+	if ZombieManager::use_kh() {
 	  self.zm.c_value = self.zm.kh.cur_min_value();
 	  self.zm.kh.pop()
 	} else {
@@ -3128,7 +3127,7 @@ impl Domain {
             .map(|s| (s.is_partial(), s.deep_size_of()))
             .unwrap_or((true, 0))
         };
-	if (size > 0) {
+	if size > 0 {
           println!("{}:{}:{}:{}", n.name(), size, n.description(false), partial);
         }
       }

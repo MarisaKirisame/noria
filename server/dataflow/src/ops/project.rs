@@ -3,7 +3,7 @@ use nom_sql::ArithmeticOperator;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
-
+use crate::bucket::BRecorder;
 use crate::prelude::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,6 +139,7 @@ impl Ingredient for Project {
         key: &KeyType,
         nodes: &DomainNodes,
         states: &'a StateMap,
+	rb: BRecorder,
     ) -> Option<Option<Box<dyn Iterator<Item = Cow<'a, [DataType]>> + 'a>>> {
         let emit = self.emit.clone();
         let additional = self.additional.clone();
@@ -161,7 +162,7 @@ impl Ingredient for Project {
             );
         }
 
-        self.lookup(*self.src, &*in_cols, key, nodes, states)
+        self.lookup(*self.src, &*in_cols, key, nodes, states, rb)
             .and_then(|result| match result {
                 Some(rs) => {
                     let r = match emit {
@@ -228,6 +229,7 @@ impl Ingredient for Project {
         _: Option<&[usize]>,
         _: &DomainNodes,
         _: &StateMap,
+	_: BRecorder,
     ) -> ProcessingResult {
         debug_assert_eq!(from, *self.src);
         if let Some(ref emit) = self.emit {

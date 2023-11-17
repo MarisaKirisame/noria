@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::{self, Display};
 use std::sync;
-
+use crate::bucket::BRecorder;
 use crate::prelude::*;
 pub use nom_sql::Operator;
 
@@ -80,6 +80,7 @@ impl Ingredient for Filter {
         _: Option<&[usize]>,
         _: &DomainNodes,
         _: &StateMap,
+	_: BRecorder,
     ) -> ProcessingResult {
         rs.retain(|r| {
             self.filter.iter().all(|(i, cond)| {
@@ -168,8 +169,9 @@ impl Ingredient for Filter {
         key: &KeyType,
         nodes: &DomainNodes,
         states: &'a StateMap,
+	rb: BRecorder,
     ) -> Option<Option<Box<dyn Iterator<Item = Cow<'a, [DataType]>> + 'a>>> {
-        self.lookup(*self.src, columns, key, nodes, states)
+        self.lookup(*self.src, columns, key, nodes, states, rb)
             .and_then(|result| {
                 let f = self.filter.clone();
                 let filter = move |r: &[DataType]| {

@@ -4,6 +4,7 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use vec_map::VecMap;
+use crate::bucket::BRecorder;
 
 /// Base is used to represent the root nodes of the Noria data flow graph.
 ///
@@ -137,6 +138,7 @@ impl Base {
         us: LocalNodeIndex,
         mut ops: Vec<TableOperation>,
         state: &StateMap,
+	br: BRecorder,
     ) -> Records {
         if self.primary_key.is_none() || ops.is_empty() {
             return ops
@@ -164,7 +166,7 @@ impl Base {
             .expect("base with primary key must be materialized");
 
         let get_current = |current_key: &'_ _| {
-            match db.lookup(key_cols, &KeyType::from(current_key)) {
+            match db.lookup(key_cols, &KeyType::from(current_key), br.clone()) {
                 LookupResult::Some(rows) => {
                     match rows.len() {
                         0 => None,

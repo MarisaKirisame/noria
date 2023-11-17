@@ -1,6 +1,5 @@
 use crate::backlog;
 use crate::prelude::*;
-use zombie_sys::*;
 use crate::bucket::*;
 
 #[derive(Serialize, Deserialize)]

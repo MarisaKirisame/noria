@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
-
+use crate::bucket::BRecorder;
 use crate::prelude::*;
 
 // pub mod latest;
@@ -166,6 +166,7 @@ where
         replay_key_cols: Option<&[usize]>,
         _: &DomainNodes,
         state: &StateMap,
+	br: BRecorder,
     ) -> ProcessingResult {
         debug_assert_eq!(from, *self.src);
 
@@ -210,7 +211,7 @@ where
                     let group = get_group_values(group_by, group_rs.peek().unwrap());
 
                     let rs = {
-                        match db.lookup(&out_key[..], &KeyType::from(&group[..])) {
+                        match db.lookup(&out_key[..], &KeyType::from(&group[..]), br.clone()) {
                             LookupResult::Some(rs) => {
                                 if replay_key_cols.is_some() {
                                     lookups.push(Lookup {

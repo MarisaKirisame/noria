@@ -5,7 +5,6 @@ use rand::prelude::*;
 use std::borrow::Cow;
 use std::sync::Arc;
 use crate::bucket::*;
-use zombie_sys::*;
 use common::Record::*;
 use std::time::Instant;
 

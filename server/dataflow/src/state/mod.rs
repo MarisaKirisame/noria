@@ -40,7 +40,7 @@ pub(crate) trait State: SizeOf + Send {
 
     fn mark_filled(&mut self, key: Vec<DataType>, tag: Tag);
 
-    fn lookup<'a>(&'a self, columns: &[usize], key: &KeyType) -> LookupResult<'a>;
+    fn lookup<'a>(&'a self, columns: &[usize], key: &KeyType, br: BRecorder) -> LookupResult<'a>;
 
     fn rows(&self) -> usize;
 

@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use crate::prelude::*;
-
+use crate::bucket::BRecorder;
 /// This will get distinct records from a set of records compared over a given set of columns
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Distinct {
@@ -44,6 +44,7 @@ impl Ingredient for Distinct {
         _: Option<&[usize]>,
         _: &DomainNodes,
         state: &StateMap,
+	br: BRecorder,
     ) -> ProcessingResult {
         debug_assert_eq!(from, *self.src);
 
@@ -112,7 +113,7 @@ impl Ingredient for Distinct {
             prev_pos = rec.is_positive();
 
             let positive = rec.is_positive();
-            match db.lookup(group_by, &KeyType::from(&group[..])) {
+            match db.lookup(group_by, &KeyType::from(&group[..]), br.clone()) {
                 LookupResult::Some(rr) => {
                     if positive {
                         //println!("record {:?}", rr);

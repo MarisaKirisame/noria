@@ -4,7 +4,6 @@ use zombie_sys::*;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::env;
-use zombie_sys::KineticHeap;
 use zombie_sys::Heap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -12,12 +11,27 @@ use rand::Rng;
 use std::convert::TryInto;
 use std::io::Write;
 use serde_json::json;
+use std::cell::RefCell;
+use std::sync::Arc;
 
 // a bucket is the smallest unit of memory management.
 // every process() shall create a new bucket.
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, Debug, Serialize, Deserialize, Default)]
 pub struct Bucket(pub usize); // maybe u32 is enough
+
+pub struct BRecorderInner {
+  pub mem: usize // write
+}
+
+#[derive(Clone)]
+pub struct BRecorder(pub Arc<RefCell<BRecorderInner>>);
+
+impl BRecorder {
+  pub fn new() -> BRecorder {
+    BRecorder(Arc::new(RefCell::new(BRecorderInner { mem:0 })))
+  }
+}
 
 pub struct KHEntry {
   pub idx: LocalNodeIndex,
@@ -104,6 +118,7 @@ pub struct ZombieManager {
   pub evict_record: HashMap<LocalNodeIndex, usize>,
   pub last_log_individual_eviction: Instant,
   pub last_update_size: Instant,
+  pub br: BRecorder,
 }
 
 impl ZombieManager {
@@ -173,6 +188,7 @@ impl ZombieManager {
       evict_record: HashMap::new(),
       last_log_individual_eviction: Instant::now(),
       last_update_size: Instant::now(),
+      br: BRecorder::new(),
     }
   }
 

@@ -1,6 +1,7 @@
 use slog::Logger;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
+use crate::bucket::BRecorder;
 
 use crate::prelude::*;
 
@@ -153,6 +154,7 @@ impl Ingredient for NodeOperator {
         replay_key_col: Option<&[usize]>,
         domain: &DomainNodes,
         states: &StateMap,
+	br: BRecorder,
     ) -> ProcessingResult {
         impl_ingredient_fn_mut!(
             self,
@@ -162,7 +164,8 @@ impl Ingredient for NodeOperator {
             data,
             replay_key_col,
             domain,
-            states
+            states,
+	    br
         )
     }
     fn on_input_raw(
@@ -174,6 +177,7 @@ impl Ingredient for NodeOperator {
         domain: &DomainNodes,
         states: &StateMap,
         log: &Logger,
+	br: BRecorder,
     ) -> RawProcessingResult {
         impl_ingredient_fn_mut!(
             self,
@@ -184,7 +188,8 @@ impl Ingredient for NodeOperator {
             replay,
             domain,
             states,
-            log
+            log,
+	    br
         )
     }
     fn on_eviction(&mut self, from: LocalNodeIndex, tag: Tag, keys: &[Vec<DataType>]) {
@@ -200,8 +205,9 @@ impl Ingredient for NodeOperator {
         key: &KeyType,
         nodes: &DomainNodes,
         states: &'a StateMap,
+	br: BRecorder,
     ) -> Option<Option<Box<dyn Iterator<Item = Cow<'a, [DataType]>> + 'a>>> {
-        impl_ingredient_fn_ref!(self, query_through, columns, key, nodes, states)
+        impl_ingredient_fn_ref!(self, query_through, columns, key, nodes, states, br)
     }
     #[allow(clippy::type_complexity)]
     fn lookup<'a>(
@@ -211,8 +217,9 @@ impl Ingredient for NodeOperator {
         key: &KeyType,
         domain: &DomainNodes,
         states: &'a StateMap,
+	br: BRecorder,
     ) -> Option<Option<Box<dyn Iterator<Item = Cow<'a, [DataType]>> + 'a>>> {
-        impl_ingredient_fn_ref!(self, lookup, parent, columns, key, domain, states)
+        impl_ingredient_fn_ref!(self, lookup, parent, columns, key, domain, states, br)
     }
     fn parent_columns(&self, column: usize) -> Vec<(NodeIndex, Option<usize>)> {
         impl_ingredient_fn_ref!(self, parent_columns, column)

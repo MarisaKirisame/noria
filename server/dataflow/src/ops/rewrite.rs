@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use std::collections::{HashMap, HashSet};
+use crate::bucket::BRecorder;
 
 /// A Rewrite data-flow operator.
 /// This node rewrites a column from a subset of records to a pre-determined value.
@@ -79,6 +80,7 @@ impl Ingredient for Rewrite {
         replay_key_cols: Option<&[usize]>,
         nodes: &DomainNodes,
         state: &StateMap,
+	br: BRecorder,
     ) -> ProcessingResult {
         debug_assert!(from == *self.src || from == *self.signal);
         let mut misses = Vec::new();
@@ -99,7 +101,7 @@ impl Ingredient for Rewrite {
                 let key = r[self.signal_key].clone();
                 // ask signal if column should be rewritten
                 let rc = self
-                    .lookup(*self.signal, &[0], &KeyType::Single(&key), nodes, state)
+                    .lookup(*self.signal, &[0], &KeyType::Single(&key), nodes, state, br.clone())
                     .unwrap();
 
                 if rc.is_none() {
@@ -138,6 +140,7 @@ impl Ingredient for Rewrite {
                         &KeyType::Single(&key),
                         nodes,
                         state,
+			br.clone(),
                     )
                     .unwrap();
 

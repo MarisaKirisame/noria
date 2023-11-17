@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-
+use crate::bucket::BRecorder;
 use crate::prelude::*;
 
 /// Applies the identity operation to the view. Since the identity does nothing,
@@ -39,6 +39,7 @@ impl Ingredient for Identity {
         _: Option<&[usize]>,
         _: &DomainNodes,
         _: &StateMap,
+	_: BRecorder,
     ) -> ProcessingResult {
         ProcessingResult {
             results: rs,

@@ -9,6 +9,7 @@ use crate::state::{RecordResult, State};
 use common::SizeOf;
 use crate::state::HashSet;
 use std::convert::TryInto;
+use crate::bucket::BRecorder;
 
 // Incremented on each PersistentState initialization so that IndexSeq
 // can be used to create unique identifiers for rows.
@@ -86,7 +87,7 @@ impl State for PersistentState {
         tokio::task::block_in_place(|| self.db.as_ref().unwrap().write_opt(batch, &opts)).unwrap();
     }
 
-    fn lookup(&self, columns: &[usize], key: &KeyType) -> LookupResult {
+    fn lookup(&self, columns: &[usize], key: &KeyType, br: BRecorder) -> LookupResult {
         let db = self.db.as_ref().unwrap();
         let index_id = self
             .indices

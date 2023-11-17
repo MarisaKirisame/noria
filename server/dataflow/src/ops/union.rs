@@ -1,6 +1,6 @@
 use slog::Logger;
 use std::collections::{BTreeMap, HashMap, HashSet};
-
+use crate::bucket::BRecorder;
 use crate::prelude::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -200,6 +200,7 @@ impl Ingredient for Union {
         _: Option<&[usize]>,
         _: &DomainNodes,
         _: &StateMap,
+	_: BRecorder,
     ) -> ProcessingResult {
         match self.emit {
             Emit::AllFrom(..) => ProcessingResult {
@@ -241,6 +242,7 @@ impl Ingredient for Union {
         n: &DomainNodes,
         s: &StateMap,
         log: &Logger,
+	br: BRecorder,
     ) -> RawProcessingResult {
         use std::mem;
 
@@ -279,7 +281,7 @@ impl Ingredient for Union {
                     assert!(self.replay_key.is_empty() || self.replay_pieces.is_empty());
 
                     // process the results (self is okay to have mutably borrowed here)
-                    let rs = self.on_input(ex, from, rs, None, n, s).results;
+                    let rs = self.on_input(ex, from, rs, None, n, s, br).results;
 
                     // *then* borrow self.full_wait_state again
                     if let FullWait::Ongoing {
@@ -300,7 +302,7 @@ impl Ingredient for Union {
 
                 if self.replay_pieces.is_empty() {
                     // no replay going on, so we're done.
-                    return RawProcessingResult::Regular(self.on_input(ex, from, rs, None, n, s));
+                    return RawProcessingResult::Regular(self.on_input(ex, from, rs, None, n, s, br));
                 }
 
                 // partial replays are flowing through us, and at least one piece is being waited
@@ -387,7 +389,7 @@ impl Ingredient for Union {
                     }
                 }
 
-                RawProcessingResult::Regular(self.on_input(ex, from, rs, None, n, s))
+                RawProcessingResult::Regular(self.on_input(ex, from, rs, None, n, s, br))
             }
             ReplayContext::Full { last } => {
                 // this part is actually surpringly straightforward, but the *reason* it is
@@ -443,7 +445,7 @@ impl Ingredient for Union {
                 // arm). feel free to go check. interestingly enough, it's also fine for us to
                 // still emit 2 (i.e., not capture it), since it'll just be dropped by the target
                 // domain.
-                let mut rs = self.on_input(ex, from, rs, None, n, s).results;
+                let mut rs = self.on_input(ex, from, rs, None, n, s, br).results;
                 if let FullWait::None = self.full_wait_state {
                     if self.required == 1 {
                         // no need to ever buffer
@@ -678,7 +680,7 @@ impl Ingredient for Union {
                             pieces.buffered.into_iter()
                         })
                         .flat_map(|(from, rs)| {
-                            self.on_input(ex, from, rs, Some(&key_cols[..]), n, s)
+                            self.on_input(ex, from, rs, Some(&key_cols[..]), n, s, br.clone())
                                 .results
                         })
                         .collect()

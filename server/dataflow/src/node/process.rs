@@ -51,7 +51,7 @@ impl Node {
                         inner, mut senders, ..
                     }) => {
                         let Input { dst, data } = unsafe { inner.take() };
-                        let mut rs = b.process(addr, data, &*state);
+                        let mut rs = b.process(addr, data, &*state, zm.br.clone());
 
                         // When a replay originates at a base node, we replay the data *through* that
                         // same base node because its column set may have changed. However, this replay
@@ -145,7 +145,7 @@ impl Node {
                     // we need to own the data
                     let old_data = mem::take(data);
 		    let b4 = time::Instant::now();
-		    let oir = i.on_input_raw(ex, from, old_data, replay, nodes, state, log);
+		    let oir = i.on_input_raw(ex, from, old_data, replay, nodes, state, log, zm.br.clone());
 		    duration = Some(b4.elapsed());
                     match oir {
                         RawProcessingResult::Regular(m) => {
@@ -381,7 +381,7 @@ pub(crate) fn materialize(
 	  Negative(v) => { zm.seen_rm += 1 }
 	});
       zm.seen_materialize += 1;
-      if (mem_usage > 0) {
+      if mem_usage > 0 {
         let t = zm.get_time() as i64;
 	//serde_json::to_writer(&zm.log, &serde_json::json!({"mem_usage":mem_usage, "t": t})).unwrap();
 	//writeln!(&zm.log).unwrap();

@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use std::collections::HashMap;
+use crate::bucket::BRecorder;
 
 /// A Trigger data-flow operator.
 ///
@@ -88,6 +89,7 @@ impl Ingredient for Trigger {
         _: Option<&[usize]>,
         _: &DomainNodes,
         state: &StateMap,
+	br: BRecorder,
     ) -> ProcessingResult {
         debug_assert_eq!(from, *self.src);
 
@@ -104,7 +106,7 @@ impl Ingredient for Trigger {
 
         let keys = trigger_keys
             .iter()
-            .filter_map(|k| match db.lookup(&[self.key], &KeyType::Single(&k)) {
+            .filter_map(|k| match db.lookup(&[self.key], &KeyType::Single(&k), br.clone()) {
                 LookupResult::Some(rs) => {
                     if rs.is_empty() {
                         Some(k)
