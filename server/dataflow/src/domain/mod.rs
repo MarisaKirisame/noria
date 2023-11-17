@@ -2887,13 +2887,18 @@ impl Domain {
       self.zm.kh.advance_to(t);
       let mut total_freed_bytes = 0;
       self.report_state_sizes();
-      while total_freed_bytes < num_bytes && (!self.zm.kh.is_empty()) {
-        self.zm.c_value = self.zm.kh.cur_min_value();
+      while total_freed_bytes < num_bytes && (if ZombieManager::use_kh() {!self.zm.kh.is_empty()} else {!self.zm.gd.is_empty()}) {
         let len = self.zm.kh.len();
 	if len % 10000 == 0 {
           println!("{}", len);
 	}
-	let entry = self.zm.kh.pop();
+	let entry = 
+	if (ZombieManager::use_kh()) {
+	  self.zm.c_value = self.zm.kh.cur_min_value();
+	  self.zm.kh.pop()
+	} else {
+	  self.zm.gd.pop()
+	};
 	let (x, freed_bytes) = self.buffer_evict(&entry, ex);
 	let y: Vec<(Vec<usize>, Vec<_>)> = x.into_iter().map(|(key_columns_, keys_)| (key_columns_.to_vec(), keys_)).collect();
 	for (key_columns, keys) in y {

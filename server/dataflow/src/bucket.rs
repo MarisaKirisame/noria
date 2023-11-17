@@ -5,6 +5,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::env;
 use zombie_sys::KineticHeap;
+use zombie_sys::Heap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use rand::Rng;
@@ -52,9 +53,37 @@ pub fn sys_time() -> u64 {
   }
 }
 
+pub struct GD {
+  pub h: Heap<KHEntry>,
+  pub l: f64,
+}
+
+impl GD {
+  pub fn new() -> GD {
+    GD {
+      h: Heap::new(),
+      l: 0.0
+    }
+  }
+
+  pub fn push(&mut self, entry: KHEntry, density: f64) {
+    self.h.push(entry, self.l + density);
+  }
+
+  pub fn pop(&mut self) -> KHEntry {
+    self.l = self.h.peek_score();
+    self.h.pop()
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.h.is_empty()
+  }
+}
+
 pub struct ZombieManager {
   pub buffer: EvictBuffer, 
   pub kh: KineticHanger<KHEntry>,
+  pub gd: GD,
   pub seen_add: usize,
   pub seen_rm: usize,
   pub seen_materialize: usize,
@@ -89,6 +118,17 @@ impl ZombieManager {
     }
   }
 
+  pub fn use_kh() -> bool {
+    let str = env::var("USE_KH").unwrap();
+    if str == "0" {
+      false
+    } else if str == "1" {
+      true
+    } else {
+      panic!()
+    }
+  }
+
   pub fn log_path() -> String {
     let dir = env::var("ZOMBIE_LOG_DIR").unwrap();
     let mut rng = rand::thread_rng();
@@ -110,6 +150,7 @@ impl ZombieManager {
     ZombieManager {
       buffer: EvictBuffer::new(),
       kh: KineticHanger::new(0),
+      gd: GD::new(),
       seen_add: 0,
       seen_rm: 0,
       seen_materialize: 0,

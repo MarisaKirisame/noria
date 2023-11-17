@@ -29,8 +29,11 @@ class Experiment:
         self.log_dir = log_dir
         with open(f"{self.log_dir}/config") as f:
             self.config = eval(f.read())
-        with open(f"{self.log_dir}/throughput") as f:
-            self.throughput = float(f.read())
+        if os.path.exists(f"{self.log_dir}/throughput"):
+            with open(f"{self.log_dir}/throughput") as f:
+                self.throughput = float(f.read())
+        else:
+            self.throughput = 0
         self.is_normal = normal_throughput(self.throughput)
         self.stdout_dir = f"{self.log_dir}/result.stdout"
         self.stderr_dir = f"{self.log_dir}/result.stderr"
@@ -51,13 +54,8 @@ class Experiment:
     def __repr__(self):
         return repr((self.config, self.peak_memory, self.throughput, self.is_normal))
 
-    def use_zombie(self):
-        if x.config["use_zombie"] == 0:
-            return False
-        elif x.config["use_zombie"] == 1:
-            return True
-        else:
-            raise
+    def evict_mode(self):
+        return x.config["evict_mode"]
 
 for x in os.listdir("log"):
     experiment.append(Experiment(f"log/{x}"))
@@ -68,24 +66,22 @@ def run(cmd):
 run("rm -rf output")
 run("mkdir output")
 
-baseline_points = []
-zombie_points = []
+emm_points = {}
 
 for x in experiment:
     if x.is_normal:
-        if x.use_zombie():
-            zombie_points.append((x.peak_memory, x.throughput))
-        else:
-            baseline_points.append((x.peak_memory, x.throughput))
-
-baseline_points.sort()
-zombie_points.sort()
+        em = x.evict_mode()
+        if em not in emm_points:
+            emm_points[em] = []
+        emm_points[em].append((x.peak_memory, x.throughput))
 
 plt.xlabel("Cache Memory (MB)")
 plt.ylabel("Ops per sec")
 
-plt.plot(*zip(*baseline_points), label="baseline")
-plt.plot(*zip(*zombie_points), label="zombie")
+for em in emm_points:
+    x = emm_points[em]
+    x.sort()
+    plt.plot(*zip(*x), label=em)
 plt.legend()
 plt.savefig("output/pic.png")
 plt.clf()
@@ -111,11 +107,15 @@ def plot_lines(lines, x_label, y_label):
     img(src=f"{count}.png")
 
 def plot_bar_chart(breakdown):
+    total_size = 0
+    for (k, v) in breakdown.items():
+        total_size += v
     sizes = []
     labels = []
     for (k, v) in breakdown.items():
-        labels.append(k)
-        sizes.append(v)
+        if v * 100 >= total_size:
+            labels.append(k)
+            sizes.append(v)
     plt.pie(sizes, labels=labels)
     count = counter.count()
     plt.savefig(f"output/{count}.png")
@@ -197,37 +197,65 @@ def single_eval(x):
     count = counter.count()
     with open(f"output/{count}.html", "w") as f:
         f.write(str(inner_doc))
-    return f"{count}.html", miss, eviction_total_time#, wait_total_time
+    return f"{count}.html", recomputation_total_time, eviction_total_time#, wait_total_time
 
-baseline_eviction_time = []
-zombie_eviction_time = []
+class Record:
+    def __init__(self):
+        self.recomputation_time = []
+        self.eviction_time = []
+        self.eviction_overhead = []
 
-baseline_recomputation_time = []
-zombie_recomputation_time = []
+    def prepare(self):
+        self.recomputation_time.sort()
+        self.eviction_time.sort()
+        self.eviction_overhead.sort()
+
+    def record(self, peak_memory, recomputation_time, eviction_time):
+        self.recomputation_time.append((peak_memory, recomputation_time))
+        self.eviction_time.append((peak_memory, eviction_time))
+        self.eviction_overhead.append((peak_memory, eviction_time/(recomputation_time + eviction_time)))
+
+emm_records = {}
 
 with doc(title='noria') as output:
     img(src="pic.png")
     for x in experiment:
         page_loc, recomputation_time, eviction_time = single_eval(x)
         if x.is_normal:
-            if x.use_zombie(): 
-                zombie_recomputation_time.append((x.peak_memory, recomputation_time))
-                zombie_eviction_time.append((x.peak_memory, eviction_time))
-            else:
-                baseline_recomputation_time.append((x.peak_memory, recomputation_time))
-                baseline_eviction_time.append((x.peak_memory, eviction_time))
+            em = x.evict_mode()
+            if em not in emm_records:
+                emm_records[em] = Record()
+            emm_records[em].record(x.peak_memory, recomputation_time, eviction_time)
         with a(href=page_loc):
-           p(str(x))
-    baseline_eviction_time.sort()
-    zombie_eviction_time.sort()
-    baseline_recomputation_time.sort()
-    zombie_recomputation_time.sort()
-    #plt.plot(*zip(*baseline_eviction_time), label="baseline_eviction")
-    #plt.plot(*zip(*zombie_eviction_time), label="zombie_eviction")
-    plt.plot(*zip(*baseline_recomputation_time), label="baseline_recomputation")
-    plt.plot(*zip(*zombie_recomputation_time), label="zombie_recomputation")
+           p(str(x)) 
+    for em in emm_records:
+        emm_records[em].prepare()
+
+    for em in emm_records:
+        r = emm_records[em]
+        plt.plot(*zip(*r.recomputation_time), label=f"{em}_recomputation")
     plt.xlabel("Cache Memory (MB)")
     plt.ylabel("Time spent(ms) across all cpu")
+    plt.legend()
+    plt.savefig("output/recomputation_time.png")
+    plt.clf()
+    img(src="recomputation_time.png")
+
+    for em in emm_records:
+        r = emm_records[em]
+        plt.plot(*zip(*r.eviction_time), label=f"{em}_eviction")
+    plt.xlabel("Cache Memory (MB)")
+    plt.ylabel("Time spent(ms) across all cpu")
+    plt.legend()
+    plt.savefig("output/eviction_time.png")
+    plt.clf()
+    img(src="eviction_time.png")
+
+    for em in emm_records:
+        r = emm_records[em]
+        plt.plot(*zip(*r.eviction_overhead), label=f"{em}_eviction_overhead")
+    plt.xlabel("Cache Memory (MB)")
+    plt.ylabel("fraction")
     plt.legend()
     plt.savefig("output/overhead.png")
     plt.clf()

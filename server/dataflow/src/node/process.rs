@@ -386,7 +386,12 @@ pub(crate) fn materialize(
 	//serde_json::to_writer(&zm.log, &serde_json::json!({"mem_usage":mem_usage, "t": t})).unwrap();
 	//writeln!(&zm.log).unwrap();
 	let slope : i128 = -(TryInto::<i128>::try_into((10000 * time_taken.unwrap().as_micros() as u128 / (mem_usage as u128))).unwrap());
-        zm.kh.push(KHEntry {idx, b:b, mem:mem_usage as usize}, &AffFunction::new(slope, -t));
+	let khe = KHEntry {idx, b:b, mem:mem_usage as usize};
+	if ZombieManager::use_kh() {
+	  zm.kh.push(khe, &AffFunction::new(slope, -t));
+	} else {
+	  zm.gd.push(khe, (-slope) as f64);
+	}
       }
       if (zm.last_print.elapsed().as_secs() >= 10) {
         zm.last_print = time::Instant::now();
