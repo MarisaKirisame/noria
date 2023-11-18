@@ -106,7 +106,7 @@ impl Ingredient for Trigger {
 
         let keys = trigger_keys
             .iter()
-            .filter_map(|k| match db.lookup(&[self.key], &KeyType::Single(&k), br) {
+            .filter_map(|k| match db.lookup(&[self.key], &KeyType::Single(&k), *us, br) {
                 LookupResult::Some(rs) => {
                     if rs.is_empty() {
                         Some(k)

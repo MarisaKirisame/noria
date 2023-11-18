@@ -89,7 +89,7 @@ impl Ingredient for Distinct {
             let group_by = &self.group_by[..];
             let group = rec
                 .iter()
-                .enumerate()
+               .enumerate()
                 .filter_map(|(i, v)| {
                     if self.group_by.iter().any(|col| col == &i) {
                         Some(v)
@@ -113,7 +113,7 @@ impl Ingredient for Distinct {
             prev_pos = rec.is_positive();
 
             let positive = rec.is_positive();
-            match db.lookup(group_by, &KeyType::from(&group[..]), br) {
+            match db.lookup(group_by, &KeyType::from(&group[..]), *us, br) {
                 LookupResult::Some(rr) => {
                     if positive {
                         //println!("record {:?}", rr);

@@ -87,7 +87,7 @@ impl State for PersistentState {
         tokio::task::block_in_place(|| self.db.as_ref().unwrap().write_opt(batch, &opts)).unwrap();
     }
 
-    fn lookup(&self, columns: &[usize], key: &KeyType, br: &mut BRecorder) -> LookupResult {
+    fn lookup(&self, columns: &[usize], key: &KeyType, _idx: LocalNodeIndex, br: &mut BRecorder) -> LookupResult {
         let db = self.db.as_ref().unwrap();
         let index_id = self
             .indices

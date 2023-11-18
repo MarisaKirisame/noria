@@ -239,7 +239,7 @@ impl Ingredient for TopK {
                 grp.extend(group_by.iter().map(|&col| &r[col]).cloned());
 
                 // check out current state
-                match db.lookup(&group_by[..], &KeyType::from(&grp[..]), br) {
+                match db.lookup(&group_by[..], &KeyType::from(&grp[..]), *us, br) {
                     LookupResult::Some(rs) => {
                         if replay_key_cols.is_some() {
                             lookups.push(Lookup {

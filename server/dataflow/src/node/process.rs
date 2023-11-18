@@ -14,6 +14,7 @@ use std::io::Write;
 use zombie_sys::KineticHeap;
 use crate::bucket::KHEntry;
 use std::time::Duration;
+use std::time::Instant;
 
 impl Node {
     #[allow(clippy::too_many_arguments)]
@@ -385,8 +386,14 @@ pub(crate) fn materialize(
         let t = zm.get_time() as i64;
 	//serde_json::to_writer(&zm.log, &serde_json::json!({"mem_usage":mem_usage, "t": t})).unwrap();
 	//writeln!(&zm.log).unwrap();
-	let slope : i128 = -(TryInto::<i128>::try_into((10000 * time_taken.unwrap().as_micros() as u128 / (mem_usage as u128))).unwrap());
-	let khe = KHEntry {idx, b:b, mem:mem_usage as usize};
+	let khe = KHEntry {
+	  idx:idx,
+	  b:b,
+	  cost: (10000 * time_taken.unwrap().as_micros()).try_into().unwrap(),
+	  mem:(mem_usage).try_into().unwrap(),
+	  entered_time: Instant::now(),
+	};
+	let slope : i128 = khe.slope();
 	if ZombieManager::use_kh() {
 	  zm.kh.push(khe, &AffFunction::new(slope, -t));
 	} else {

@@ -252,7 +252,7 @@ where
 	br: &mut BRecorder,
     ) -> Option<Option<Box<dyn Iterator<Item = Cow<'a, [DataType]>> + 'a>>> {
         match states.get(parent) {
-            Some(state) => match state.lookup(columns, key, br) {
+            Some(state) => match state.lookup(columns, key, parent, br) {
 	        LookupResult::Some(rs) => Some(Some(Box::new(rs.into_iter()) as Box<_>)),
                 LookupResult::Missing => Some(None),
 	    }

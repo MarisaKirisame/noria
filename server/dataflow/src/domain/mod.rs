@@ -27,6 +27,7 @@ use crate::bucket::ZombieManager;
 use zombie_sys::KineticHeap;
 use std::convert::TryInto;
 use crate::bucket::*;
+use zombie_sys::AffFunction;
 
 #[derive(Debug)]
 pub enum PollEvent {
@@ -1619,7 +1620,7 @@ impl Domain {
 		let ref nodes = &self.nodes;
 		let ref mut br = &mut self.zm.br;
                 let (keys, misses): (HashSet<_>, _) = keys.into_iter().partition(|key| match state
-                    .lookup(&cols[..], &KeyType::from(key), br)
+                    .lookup(&cols[..], &KeyType::from(key), source, br)
                 {
                     LookupResult::Some(res) => {
                         rs.extend(res.into_iter().map(|r| Domain::seed_row(ingress_inject, nodes, source, r)));
@@ -1749,7 +1750,7 @@ impl Domain {
                     .state
                     .get(source)
                     .expect("migration replay path started with non-materialized node")
-                    .lookup(&cols[..], &KeyType::from(&key[..]), &mut self.zm.br);
+                    .lookup(&cols[..], &KeyType::from(&key[..]), source, &mut self.zm.br);
 
                 let mut k = HashSet::new();
                 k.insert(key.clone().into_owned());
@@ -2896,8 +2897,24 @@ impl Domain {
 	}
 	let entry = 
 	if ZombieManager::use_kh() {
-	  self.zm.c_value = self.zm.kh.cur_min_value();
-	  self.zm.kh.pop()
+	  fn pop_reenter(zm: &mut ZombieManager) -> KHEntry {
+	    zm.c_value = zm.kh.cur_min_value();
+            let e = zm.kh.pop();
+	    let true_staleness = zm.br.m.get(&(e.idx, e.b)).unwrap().last_access.elapsed();
+	    if 2 * true_staleness < e.entered_time.elapsed() {
+	      zm.kh.push(KHEntry{
+	        idx: e.idx,
+		b: e.b,
+		cost: e.cost,
+		mem: e.mem,
+		entered_time: Instant::now()
+	      }, &AffFunction::new(e.slope(), -(zm.get_time() as i64)));
+	      pop_reenter(zm)
+	    } else {
+	      e
+	    }
+	  }
+	  pop_reenter(&mut self.zm)
 	} else {
 	  self.zm.gd.pop()
 	};

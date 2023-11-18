@@ -10,6 +10,7 @@ use common::SizeOf;
 use crate::state::HashSet;
 use std::convert::TryInto;
 use crate::state::BRecorder;
+use crate::state::RecordResult;
 
 #[derive(Default)]
 pub struct MemoryState {
@@ -135,12 +136,24 @@ impl State for MemoryState {
         self.mem_size = self.mem_size.checked_sub(freed_bytes).unwrap();
     }
 
-    fn lookup<'a>(&'a self, columns: &[usize], key: &KeyType, br: &mut BRecorder) -> LookupResult<'a> {
+    fn lookup<'a>(&'a self, columns: &[usize], key: &KeyType, idx: LocalNodeIndex, br: &mut BRecorder) -> LookupResult<'a> {
         debug_assert!(!self.state.is_empty(), "lookup on uninitialized index");
         let index = self
             .state_for(columns)
             .expect("lookup on non-indexed column set");
-        self.state[index].lookup(key)
+        let res = self.state[index].lookup(key);
+	match res {
+	  LookupResult::Some(RecordResult::Borrowed(x)) => {
+	    for y in x {
+	      br.touch(idx, y.1)
+	    }
+	  },
+	  LookupResult::Some(RecordResult::Owned(ref x)) => {
+            assert_eq!(x.len(), 0);
+	  },
+	  LookupResult::Missing => {},
+	};
+	res
     }
 
     fn keys(&self) -> Vec<Vec<usize>> {

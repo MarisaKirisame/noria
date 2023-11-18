@@ -74,7 +74,7 @@ impl Ingredient for Latest {
                     return None;
                 }
 
-                match db.lookup(&[self.key], &KeyType::Single(&r[self.key]), br) {
+                match db.lookup(&[self.key], &KeyType::Single(&r[self.key]), *us, br) {
                     LookupResult::Some(rs) => {
                         if replay_key_cols.is_some() {
                             lookups.push(Lookup {

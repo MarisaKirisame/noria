@@ -20,20 +20,57 @@ use std::sync::Arc;
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, Debug, Serialize, Deserialize, Default)]
 pub struct Bucket(pub usize); // maybe u32 is enough
 
-pub struct BRecorder(pub usize);
+pub struct BStats {
+  pub last_access: Instant,
+  pub access_count: usize, // maybe u32 is enough
+}
+
+impl BStats {
+  pub fn new() -> BStats {
+    BStats {
+      last_access: Instant::now(),
+      access_count: 1
+    }
+  }
+
+  pub fn touch(&mut self) {
+    self.last_access = Instant::now();
+    self.access_count += 1;
+  }
+}
+
+pub struct BRecorder {
+  pub m: HashMap<(LocalNodeIndex, Bucket), BStats>,
+}
 
 impl BRecorder {
   pub fn new() -> BRecorder {
-    BRecorder(0)
+    BRecorder {
+      m: HashMap::new()
+    }
+  }
+
+  pub fn touch(&mut self, i: LocalNodeIndex, b: Bucket) {
+    match self.m.get_mut(&(i, b)) {
+      Some(x) => x.touch(),
+      None => { self.m.insert((i, b), BStats::new()); }
+    }
   }
 }
 
 pub struct KHEntry {
   pub idx: LocalNodeIndex,
   pub b: Bucket,
-  pub mem: usize,  
+  pub cost: u64,
+  pub mem: usize,
+  pub entered_time: Instant,
 }
 
+impl KHEntry {
+  pub fn slope(&self) -> i128 {
+    -(TryInto::<i128>::try_into(self.cost / TryInto::<u64>::try_into(self.mem).unwrap()).unwrap())
+  }
+}
 pub struct EvictEntry {
   pub b: HashSet<Bucket>,
   pub mem: usize

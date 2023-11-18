@@ -211,7 +211,7 @@ where
                     let group = get_group_values(group_by, group_rs.peek().unwrap());
 
                     let rs = {
-                        match db.lookup(&out_key[..], &KeyType::from(&group[..]), br) {
+                        match db.lookup(&out_key[..], &KeyType::from(&group[..]), *us, br) {
                             LookupResult::Some(rs) => {
                                 if replay_key_cols.is_some() {
                                     lookups.push(Lookup {
