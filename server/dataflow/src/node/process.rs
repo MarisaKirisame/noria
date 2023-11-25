@@ -392,8 +392,10 @@ pub(crate) fn materialize(
 	  cost: (10000 * time_taken.unwrap().as_micros()).try_into().unwrap(),
 	  mem:(mem_usage).try_into().unwrap(),
 	  entered_time: Instant::now(),
+	  access_count: 1,
 	};
-	let slope : i128 = khe.slope();
+	let slope : i128 = khe.slope();	
+        zm.br.touch(idx, b);
 	if ZombieManager::use_kh() {
 	  zm.kh.push(khe, &AffFunction::new(slope, -t));
 	} else {

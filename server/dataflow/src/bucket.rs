@@ -58,12 +58,14 @@ impl BRecorder {
   }
 }
 
+#[derive(Clone)]
 pub struct KHEntry {
   pub idx: LocalNodeIndex,
   pub b: Bucket,
   pub cost: u64,
   pub mem: usize,
   pub entered_time: Instant,
+  pub access_count: usize,
 }
 
 impl KHEntry {
@@ -119,6 +121,18 @@ impl GD {
   pub fn pop(&mut self) -> KHEntry {
     self.l = self.h.peek_score();
     self.h.pop()
+  }
+
+  pub fn pop_no_advance(&mut self) -> KHEntry {
+    self.h.pop()
+  }
+
+  pub fn len(&self) -> usize {
+    self.h.len()
+  }
+  
+  pub fn peek(&self) -> &KHEntry {
+    self.h.peek()
   }
 
   pub fn is_empty(&self) -> bool {
@@ -231,7 +245,7 @@ impl ZombieManager {
 
   pub fn record_eviction(&mut self, time: Duration) {
     self.time_spent_eviction += time;
-    if (self.last_log_eviction.elapsed().as_secs() >= 1) {
+    if self.last_log_eviction.elapsed().as_secs() >= 1 {
       self.write_json(json!({"command": "eviction", "current_time": sys_time(), "spent_time": duration_to_millis(self.time_spent_eviction), "c_value": self.c_value}));
       self.last_log_eviction = Instant::now();
       self.time_spent_eviction = Duration::ZERO;
@@ -244,7 +258,7 @@ impl ZombieManager {
   
   pub fn record_recomputation(&mut self, time: Duration) {
     self.time_spent_recomputation += time;
-    if (self.last_log_recomputation.elapsed().as_secs() >= 1) {
+    if self.last_log_recomputation.elapsed().as_secs() >= 1 {
       self.write_json(json!({"command": "recomputation", "current_time": sys_time(), "spent_time": duration_to_millis(self.time_spent_recomputation)}));
       self.last_log_recomputation = Instant::now();
       self.time_spent_recomputation = Duration::ZERO;
@@ -253,7 +267,7 @@ impl ZombieManager {
 
   // note that record_eviction and record_recomputation pass in the current duration, while this pass in the total duration.
   pub fn record_waiting(&mut self, total_time_ms: u64) {
-    if (self.last_log_waiting.elapsed().as_secs() >= 1) {
+    if self.last_log_waiting.elapsed().as_secs() >= 1 {
       assert!(total_time_ms >= self.total_time_spent_waiting_ms);
       self.write_json(json!({"command": "wait", "current_time": sys_time(), "spent_time": total_time_ms - self.total_time_spent_waiting_ms}));
       self.last_log_waiting = Instant::now();
@@ -277,7 +291,7 @@ impl ZombieManager {
   pub fn record_individual_eviction(&mut self, i: LocalNodeIndex, m: usize) {
     let e = self.evict_record.entry(i).or_insert(0);
     *e += m;
-    if (self.last_log_individual_eviction.elapsed().as_secs() >= 5) {
+    if self.last_log_individual_eviction.elapsed().as_secs() >= 5 {
       let mut breakdown = serde_json::Map::<String, serde_json::Value>::new();
       for x in &self.evict_record {
         breakdown.insert(x.0.to_string(), json!(x.1));
@@ -289,7 +303,7 @@ impl ZombieManager {
   }
 
   pub fn record_size(&mut self, m: usize) {
-    if (self.last_update_size.elapsed().as_secs() >= 1) {
+    if self.last_update_size.elapsed().as_secs() >= 1 {
       self.write_json(json!({"command": "update_size", "current_time": sys_time(), "size": m}));
       self.last_update_size = Instant::now();
     }

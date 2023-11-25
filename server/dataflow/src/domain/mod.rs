@@ -2883,7 +2883,6 @@ impl Domain {
       let to_zombie = num_bytes - to_readers;
       self.evict_mk_zombie(to_zombie, ex);
     }
-
     // todo: trigger downstream eviction and update state sizes
     pub fn evict_mk_zombie(&mut self, mut num_bytes: usize, ex: &mut dyn Executor) {
       let t = self.zm.get_time().try_into().unwrap();
@@ -2891,7 +2890,7 @@ impl Domain {
       let mut total_freed_bytes = 0;
       self.report_state_sizes();
       while total_freed_bytes < num_bytes && (if ZombieManager::use_kh() {!self.zm.kh.is_empty()} else {!self.zm.gd.is_empty()}) {
-        let len = self.zm.kh.len();
+        let len = if ZombieManager::use_kh() {self.zm.kh.len()} else {self.zm.gd.len()};
 	if len % 10000 == 0 {
           println!("{}", len);
 	}
@@ -2900,14 +2899,15 @@ impl Domain {
 	  fn pop_reenter(zm: &mut ZombieManager) -> KHEntry {
 	    zm.c_value = zm.kh.cur_min_value();
             let e = zm.kh.pop();
-	    let true_staleness = zm.br.m.get(&(e.idx, e.b)).unwrap().last_access.elapsed();
-	    if 2 * true_staleness < e.entered_time.elapsed() {
+	    let stats = zm.br.m.get(&(e.idx, e.b)).unwrap();
+	    if (2 * stats.last_access.elapsed()) < e.entered_time.elapsed() {
 	      zm.kh.push(KHEntry{
 	        idx: e.idx,
 		b: e.b,
 		cost: e.cost,
 		mem: e.mem,
-		entered_time: Instant::now()
+		entered_time: stats.last_access,
+		access_count: stats.access_count,
 	      }, &AffFunction::new(e.slope(), -(zm.get_time() as i64)));
 	      pop_reenter(zm)
 	    } else {
@@ -2916,7 +2916,29 @@ impl Domain {
 	  }
 	  pop_reenter(&mut self.zm)
 	} else {
-	  self.zm.gd.pop()
+	  fn gd_pop_reenter(zm: &mut ZombieManager) -> KHEntry {
+	    let e: KHEntry = zm.gd.peek().clone();
+	    let stats = zm.br.m.get(&(e.idx, e.b)).unwrap();
+	    fn to_128(x: usize) -> u128 {
+	      x.try_into().unwrap()
+	    }
+	    if (2 * stats.last_access.elapsed().as_micros() * to_128(e.access_count)) < (e.entered_time.elapsed().as_micros() * to_128(stats.access_count)) {
+	      zm.gd.pop_no_advance();
+	      let new_e = KHEntry {
+	        idx:e.idx,
+		b: e.b,
+		cost: e.cost,
+		mem: e.mem,
+		entered_time: stats.last_access,
+		access_count: stats.access_count
+	      };
+	      zm.gd.push(new_e, (-e.slope()) as f64 * stats.access_count as f64);
+	      gd_pop_reenter(zm)
+	    } else {
+	      zm.gd.pop()
+	    }
+	  }
+	  gd_pop_reenter(&mut self.zm)
 	};
 	let (x, freed_bytes) = self.buffer_evict(&entry, ex);
 	let y: Vec<(Vec<usize>, Vec<_>)> = x.into_iter().map(|(key_columns_, keys_)| (key_columns_.to_vec(), keys_)).collect();
